@@ -18,7 +18,7 @@ for n in range(420):
     lat+=off*random.choice([-1,1])
     p=(1.60+random.random()*0.14) if off<0.003 else (1.44+random.random()*0.2)
     lista.append({"IDEESS":str(n),"Latitud":f"{lat:.6f}".replace('.',','),"Longitud (WGS84)":f"{lon:.6f}".replace('.',','),
-      "Rótulo":random.choice(["REPSOL","BALLENOIL","PLENOIL","CEPSA","BP","GALP","PETROPRIX"]),"Dirección":f"AUTOVIA A-3 KM {n}","Localidad":"MOTILLA DEL PALANCAR","Municipio":"Motilla","Provincia":"CUENCA","Horario":"L-D: 24H","Tipo Venta":"P",
+      "Rótulo":random.choice(["REPSOL","BALLENOIL","PLENOIL","CEPSA","BP","GALP","PETROPRIX"]),"Dirección":f"AUTOVIA A-3 KM {n}","Localidad":"MOTILLA DEL PALANCAR","Municipio":"Motilla","Provincia":"CUENCA","Horario":random.choice(["L-D: 24H","L-D: 24H","L-V: 06:00-22:00; S: 08:00-14:00","L-D: 02:00-03:00","raro"]),"Tipo Venta":"P",
       "Precio Gasolina 95 E5":f"{p:.3f}".replace('.',','),"Precio Gasoleo A":f"{p-0.1:.3f}".replace('.',','),"Precio Gasolina 98 E5":"","Precio Gasoleo Premium":"","Precio Gases licuados del petróleo":""})
 # relleno para superar el mínimo de 1000
 for n in range(1200):
@@ -53,6 +53,11 @@ with sync_playwright() as p:
         pg.wait_for_selector('.best', timeout=20000); pg.wait_for_timeout(600)
         pg.screenshot(path=f'{OUT}/res-{scheme}.png', full_page=True)
         if scheme=='light':
-            print(pg.evaluate("""()=>{const p=state.plan,b=p.pool[0];return JSON.stringify({D:p.D,range:p.rangeKm,reach:p.reachKm,must:p.mustRefuel,ref:p.ref,refFrom:p.refFrom,near:p.near.length,pool:p.pool.length,best:{km:b.km,price:b.price,off:b.offKm,dk:b.detourKm,dm:b.detourMin,L:b.litres,cost:b.detourCost,net:b.net,be:b.breakEven,exact:b.exact},stopKm:p.route.stopKm,link:document.querySelector('.go').href,status:document.getElementById('status').textContent})}"""))
+            DUMP="""()=>{const p=state.plan,c=p.chosen;return JSON.stringify({D:Math.round(p.D),range:Math.round(p.rangeKm),full:Math.round(p.fullRangeKm),must:p.mustRefuel,ref:p.ref,kind:p.refKind,near:p.near.length,closed:p.closed,first:p.first.length,later:p.later.length,singles:p.singles.length,incomplete:p.incomplete,legs:c.legs.map(l=>({km:Math.round(l.s.km),p:l.s.price,L:+l.L.toFixed(1),full:l.full,h:l.s.s[8],dm:+l.s.detourMin.toFixed(1)})),net:+c.net.toFixed(2),status:document.getElementById('status').textContent})}"""
+            print(pg.evaluate(DUMP))
+            pg.fill('#deposito','20'); pg.evaluate("()=>{const n=document.getElementById('nivel');n.value=100;n.dispatchEvent(new Event('input',{bubbles:true}))}")
+            pg.evaluate("()=>document.querySelectorAll('details').forEach(d=>d.open=true)"); pg.fill('#d-repsol','8'); pg.click('#btn-go'); pg.wait_for_timeout(3500)
+            print(pg.evaluate(DUMP)); pg.screenshot(path=f'{OUT}/res2-light.png', full_page=True)
+            pg.click('.dot'); pg.wait_for_timeout(300); print('popup:', pg.locator('.leaflet-popup-content').count())
         print(scheme,'errors:',errs)
     b.close()

@@ -185,3 +185,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .leaflet-container { font-family: var(--f-body); }
 @media (prefers-reduced-motion: no-preference) { .cta:active, .go:active { transform: translateY(1px); } }
 .tiles-dark { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9); }
+
+.when input { color-scheme: light; }
+.sep { border: 0; border-top: 1px dashed var(--line); margin: 0 16px; }
+.best-id .what { color: var(--ink); font-weight: 500; }
+.best-id .what b { font-weight: 700; }
+.note.info { background: var(--blue-soft); color: var(--ink); }
+.linkbtn { align-self: flex-start; background: transparent; border: 0; padding: 0 2px; color: var(--blue); font-weight: 600; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.st .more { font-style: italic; }
+.dot { cursor: pointer; }
+.adv + .adv { margin-top: -4px; }
+.leaflet-popup-content { font-size: 14px; line-height: 1.4; margin: 10px 12px; }
+.leaflet-popup-content a { color: #0B4EA2; font-weight: 600; }

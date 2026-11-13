@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="app.css?v=3">
+<link rel="stylesheet" href="app.css?v=4">
 </head>
 <body>
 <main class="wrap">
@@ -50,6 +50,10 @@
         <ul class="sugg" id="sugg-destino" hidden></ul>
       </div>
       <button type="button" id="btn-add" class="addstop">+ Añadir parada intermedia</button>
+      <div class="field when">
+        <label for="salida">Salgo (vacío = ahora)</label>
+        <div class="inrow"><input id="salida" type="datetime-local"></div>
+      </div>
     </section>
 
     <section class="card car" aria-label="Tu coche">
@@ -90,8 +94,18 @@
             <label for="tiempo">Mi tiempo vale</label>
             <div class="unit"><input id="tiempo" type="number" inputmode="numeric" step="1" min="0" max="60" value="6"><span>€/h</span></div>
           </div>
+          <div class="numfield">
+            <label for="margen">En carretera gasto</label>
+            <div class="unit"><input id="margen" type="number" inputmode="numeric" step="5" min="0" max="50" value="10"><span>% más</span></div>
+          </div>
         </div>
-        <p class="hint">El valor del tiempo solo ordena las paradas: resta al ahorro los minutos de desvío. Pon 0 para ordenar solo por euros.</p>
+        <p class="hint">El valor del tiempo solo ordena las paradas: resta al ahorro los minutos de desvío y de parada. El margen de carretera hace más prudente la autonomía; no cambia los euros.</p>
+      </details>
+
+      <details class="adv">
+        <summary>Mis descuentos</summary>
+        <div class="grid3" id="discounts"></div>
+        <p class="hint">Céntimos por litro que te descuenta cada marca con su tarjeta o app. Se restan al precio de sus gasolineras.</p>
       </details>
     </section>
 
@@ -105,9 +119,10 @@
     <h2>Cómo decide</h2>
     <ol>
       <li><b>Traza tu ruta</b> y calcula hasta qué kilómetro llegas con lo que llevas en el depósito.</li>
-      <li><b>Mira las gasolineras de ese tramo</b>, las de pie de carretera y las que quedan a pocos kilómetros de una salida.</li>
+      <li><b>Mira las gasolineras de ese tramo</b> que estarán abiertas cuando pases, las de pie de carretera y las que quedan a pocos kilómetros de una salida.</li>
       <li><b>Mide el desvío real</b> de cada una, en kilómetros y minutos, y lo resta al ahorro.</li>
-      <li><b>Compara con el precio habitual a pie de ruta</b>, que es donde acabarías parando sin planificar. No con la más cara de la zona.</li>
+      <li><b>Compara con el precio habitual a pie de carretera</b>, que es donde acabarías parando sin planificar. No con la más cara de la zona.</li>
+      <li><b>Si compensa, reparte el repostaje en dos paradas</b>: lo justo en una cara para llegar a una barata, o llenar antes de salir.</li>
     </ol>
   </section>
 
@@ -118,6 +133,6 @@
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="app.js?v=3"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
