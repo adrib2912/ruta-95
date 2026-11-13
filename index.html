@@ -86,59 +86,66 @@
     <p class="hint">Toca una ruta en el mapa o en la lista. Los peajes salen del mapa de OpenStreetMap: indican el tramo, no el precio.</p>
   </section>
 
-  <!-- Panel 3: Coche -->
+  <!-- Panel 3: Coche, una pregunta por tarjeta -->
   <section class="panel" id="p2" aria-label="Coche" hidden>
-    <div class="card stage">
-      <div class="road moving"><span class="veh" id="car-prev"></span><span class="pump" style="right:14px"></span></div>
-      <div class="pickrow">
-        <div class="chips" id="car-types" role="radiogroup" aria-label="Tamaño del coche"></div>
-        <div class="swatches" id="car-colors" role="radiogroup" aria-label="Color del coche"></div>
-      </div>
-    </div>
+    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div id="deck">
+      <section class="qcard card" data-q="coche">
+        <h2 class="ptitle">¿Cómo es tu coche?</h2>
+        <div class="viewer"><canvas id="car3d"></canvas><div class="veh flat" id="car-flat" hidden></div></div>
+        <p class="hint center" id="car-hint">Arrástralo para girarlo</p>
+        <div class="chips" id="car-types" role="radiogroup" aria-label="Carrocería"></div>
+        <div class="swatches" id="car-colors" role="radiogroup" aria-label="Color"></div>
+      </section>
 
-    <div class="card car">
-      <div class="chips" id="fuels" role="radiogroup" aria-label="Combustible"></div>
-      <div class="grid2">
-        <div class="numfield">
-          <label for="consumo">Consumo</label>
-          <div class="unit"><input id="consumo" type="number" inputmode="decimal" step="0.1" min="2" max="25" value="5.8"><span>L/100 km</span></div>
-        </div>
-        <div class="numfield">
-          <label for="deposito">Depósito</label>
-          <div class="unit"><input id="deposito" type="number" inputmode="numeric" step="1" min="10" max="150" value="45"><span>L</span></div>
-        </div>
-      </div>
-      <div class="gauge">
-        <div class="gauge-head"><label for="nivel">Depósito al salir</label><output id="nivel-out" for="nivel"></output></div>
-        <input id="nivel" type="range" min="5" max="100" step="5" value="50">
-        <div class="gauge-ticks" aria-hidden="true"><span>R</span><span>¼</span><span>½</span><span>¾</span><span>Lleno</span></div>
-      </div>
-      <div>
-        <p class="qlabel">Quiero repostar antes de bajar de</p>
-        <div class="chips" id="umbral" role="radiogroup" aria-label="Cuándo repostar"></div>
-        <p class="hint" id="umbral-out"></p>
+      <section class="qcard card" data-q="fuel" hidden>
+        <h2 class="ptitle">¿Qué combustible lleva?</h2>
+        <div class="tiles" id="fuels" role="radiogroup" aria-label="Combustible"></div>
+      </section>
+
+      <section class="qcard card" data-q="nums" hidden>
+        <h2 class="ptitle">¿Cuánto gasta y cuánto le cabe?</h2>
+        <div class="stepper"><label for="consumo">Consumo medio</label>
+          <div><button type="button" data-step="consumo:-0.1" aria-label="Menos consumo">−</button><input id="consumo" type="number" inputmode="decimal" step="0.1" min="2" max="25" value="5.8"><button type="button" data-step="consumo:0.1" aria-label="Más consumo">+</button></div><span>L/100 km</span></div>
+        <div class="stepper"><label for="deposito">Depósito</label>
+          <div><button type="button" data-step="deposito:-1" aria-label="Menos depósito">−</button><input id="deposito" type="number" inputmode="numeric" step="1" min="10" max="150" value="45"><button type="button" data-step="deposito:1" aria-label="Más depósito">+</button></div><span>litros</span></div>
+        <p class="hint" id="tipico"></p>
+      </section>
+
+      <section class="qcard card" data-q="umbral" hidden>
+        <h2 class="ptitle">¿Cuándo quieres repostar?</h2>
+        <p class="sub">Buscaré parada antes de que el depósito baje de ahí.</p>
+        <div class="tiles" id="umbral" role="radiogroup" aria-label="Cuándo repostar"></div>
         <label class="check"><input type="checkbox" id="temprano"> Prefiero no parar en la primera hora</label>
-      </div>
+      </section>
 
-      <details class="adv">
-        <summary>Ajustes finos</summary>
-        <div class="rows-set">
-          <div class="numfield"><label for="pasillo">Buscar hasta</label><div class="unit"><input id="pasillo" type="number" inputmode="numeric" step="1" min="1" max="10" value="4"><span>km de la ruta</span></div></div>
-          <div class="numfield"><label for="tiempo">Mi tiempo vale</label><div class="unit"><input id="tiempo" type="number" inputmode="numeric" step="1" min="0" max="60" value="6"><span>€/h</span></div></div>
-          <div class="numfield"><label for="margen">En carretera gasto</label><div class="unit"><input id="margen" type="number" inputmode="numeric" step="5" min="0" max="50" value="10"><span>% más</span></div></div>
-        </div>
-        <p class="hint">El valor del tiempo solo ordena las paradas. El margen de carretera hace más prudente la autonomía; no cambia los euros.</p>
-      </details>
-      <details class="adv">
-        <summary>Mis descuentos</summary>
-        <div class="rows-set" id="discounts"></div>
-        <p class="hint">Céntimos por litro que te descuenta cada marca con su tarjeta o app.</p>
-      </details>
-      <div class="skins" id="skins" role="group" aria-label="Aspecto">Aspecto
-        <button type="button" data-skin-btn="">Señal</button>
-        <button type="button" data-skin-btn="asfalto">Asfalto</button>
-        <button type="button" data-skin-btn="ticket">Ticket</button>
-      </div>
+      <section class="qcard card" data-q="desvio" hidden>
+        <h2 class="ptitle">¿Cuánto te desvías por ahorrar?</h2>
+        <div class="tiles" id="desvio" role="radiogroup" aria-label="Desvío"></div>
+      </section>
+
+      <section class="qcard card" data-q="nivel" hidden>
+        <h2 class="ptitle">¿Cuánto llevas ahora?</h2>
+        <div class="dialbox"><div id="dial"></div><output id="nivel-out" for="nivel"></output></div>
+        <input id="nivel" type="range" min="5" max="100" step="5" value="50" aria-label="Depósito al salir">
+        <p class="hint" id="umbral-out"></p>
+        <p class="carsum" id="car-sum"></p>
+        <button type="button" class="linkbtn" id="btn-editcar" hidden>Cambiar coche y preferencias</button>
+        <details class="adv">
+          <summary>Descuentos y ajustes</summary>
+          <div class="rows-set" id="discounts"></div>
+          <div class="rows-set">
+            <div class="numfield"><label for="tiempo">Mi tiempo vale</label><div class="unit"><input id="tiempo" type="number" inputmode="numeric" step="1" min="0" max="60" value="6"><span>€/h</span></div></div>
+            <div class="numfield"><label for="margen">En carretera gasto</label><div class="unit"><input id="margen" type="number" inputmode="numeric" step="5" min="0" max="50" value="10"><span>% más</span></div></div>
+          </div>
+          <p class="hint">Descuentos en céntimos por litro de tu tarjeta o app. El valor del tiempo ordena las paradas; el margen hace más prudente la autonomía.</p>
+          <div class="skins" id="skins" role="group" aria-label="Aspecto">Aspecto
+            <button type="button" data-skin-btn="">Señal</button>
+            <button type="button" data-skin-btn="asfalto">Asfalto</button>
+            <button type="button" data-skin-btn="ticket">Ticket</button>
+          </div>
+        </details>
+      </section>
     </div>
   </section>
 
@@ -178,6 +185,7 @@
 </nav>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="app.js?v=8"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

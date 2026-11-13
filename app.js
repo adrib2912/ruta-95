@@ -43,7 +43,7 @@ const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u
 
 const state = { fuel: 'g95', origin: null, dest: null, stops: [], stopPlaces: [], discounts: {}, stations: null, places: null, recents: [],
   routes: null, alt: 0, plan: null, sort: 'score', map: null, rmap: null, mapDirty: true, markers: new Map(),
-  car: { type: 'm', color: '#1F5FBF' }, frac: 0.12, panel: 0, maxPanel: 0, stationsP: null };
+  car: { type: 'com', color: '#1F5FBF' }, frac: 0.25, detour: 'short', carDone: false, editing: false, q: 0, panel: 0, maxPanel: 0, stationsP: null };
 
 /* ---------- Geometría ---------- */
 function hav(aLat, aLon, bLat, bLon) {
@@ -281,6 +281,11 @@ function solve(P) {
     P.earlyBest = singles.find((pl) => pl.stops[0].early) || null;
     singles = singles.filter((pl) => !pl.stops[0].early);
   }
+  P.detourRelaxed = false;
+  if (Number.isFinite(P.car.maxDetour) && singles.length) {
+    const ok = singles.filter((pl) => pl.detMin <= P.car.maxDetour);
+    if (ok.length) singles = ok; else P.detourRelaxed = true;
+  }
   pairs.sort((x, y) => y.score - x.score);
   const s1 = singles[0], p2 = pairs[0];
   P.singles = singles;
@@ -448,20 +453,120 @@ async function refineDetours(P) {
   }
 }
 
-/* ---------- Interfaz: coche y ajustes ---------- */
+/* ---------- Interfaz: coche y preguntas ---------- */
+/* Cada carrocería se describe con su perfil lateral en metros; de ahí salen el dibujo 2D y el modelo 3D. */
 const CAR_TYPES = [
-  { k: 's', n: 'Pequeño', d: 'M6 38v-9q0-4 5-5l14-3 12-11q3-3 8-3h22q5 0 8 4l9 12 12 3q5 1 5 6v7z', w: 'M34 20l10-9q2-2 5-2h8v11zM61 9h11q3 0 5 3l6 8H61z' },
-  { k: 'm', n: 'Mediano', d: 'M4 38v-8q0-4 5-5l18-3 14-9q4-3 9-3h20q5 0 9 3l13 9 16 3q6 1 6 6v7z', w: 'M36 21l10-7q3-2 6-2h6v9zM62 12h8q3 0 6 2l10 7H62z' },
-  { k: 'l', n: 'Grande', d: 'M4 38V24q0-4 4-5l8-2 7-10q2-3 7-3h46q5 0 7 4l6 11 14 3q6 1 6 6v10z', w: 'M26 18l5-8q1-2 4-2h18v10zM57 8h18q3 0 4 2l5 8H57z' },
+  { k: 'urb', n: 'Urbano', len: 3.4, w: 1.62, gc: 0.24, belt: 0.86, roof: 1.5, wind: 0.95, rf: 0.45, rr: -1.4, rear: -1.62, nose: 0.72, r: 0.29, cons: 5.0, tank: 35 },
+  { k: 'com', n: 'Compacto', len: 4.1, w: 1.78, gc: 0.22, belt: 0.82, roof: 1.42, wind: 1.0, rf: 0.35, rr: -1.45, rear: -1.95, nose: 0.66, r: 0.31, cons: 5.8, tank: 45 },
+  { k: 'ber', n: 'Berlina', len: 4.7, w: 1.82, gc: 0.2, belt: 0.8, roof: 1.38, wind: 1.05, rf: 0.3, rr: -0.95, rear: -1.7, nose: 0.64, r: 0.32, cons: 6.2, tank: 55 },
+  { k: 'suv', n: 'SUV', len: 4.5, w: 1.88, gc: 0.34, belt: 1.02, roof: 1.68, wind: 1.1, rf: 0.5, rr: -1.8, rear: -2.12, nose: 0.92, r: 0.38, cons: 7.2, tank: 58 },
+  { k: 'fur', n: 'Furgoneta', len: 4.9, w: 1.95, gc: 0.26, belt: 1.05, roof: 1.95, wind: 1.95, rf: 1.4, rr: -2.3, rear: -2.4, nose: 0.9, r: 0.34, cons: 8.0, tank: 70 },
+  { k: 'dep', n: 'Deportivo', len: 4.4, w: 1.86, gc: 0.17, belt: 0.68, roof: 1.17, wind: 0.75, rf: -0.05, rr: -0.85, rear: -1.85, nose: 0.5, r: 0.34, cons: 8.5, tank: 55 },
 ];
-const CAR_COLORS = ['#F2F2F2', '#22262B', '#8A9199', '#D5202A', '#1F5FBF', '#2E7D4F', '#F2B705'];
-const THRESHOLDS = [{ f: 0.12, n: 'Reserva' }, { f: 0.25, n: '¼' }, { f: 1 / 3, n: '⅓' }, { f: 0.5, n: '½' }];
+const CAR_COLORS = ['#F2F2F2', '#22262B', '#8A9199', '#D5202A', '#1F5FBF', '#2E7D4F', '#F2B705', '#18A0A8'];
+const THRESHOLDS = [{ f: 0.12, n: 'En reserva', d: 'Apuro el depósito' }, { f: 0.25, n: 'A un cuarto', d: 'Lo habitual' }, { f: 1 / 3, n: 'A un tercio', d: 'Con margen' }, { f: 0.5, n: 'A medio depósito', d: 'No me la juego' }];
+const DETOURS = [
+  { k: 'road', n: 'Solo a pie de carretera', d: 'Sin salir de mi ruta', corridor: 1.2, max: 2.5 },
+  { k: 'short', n: 'Un desvío corto', d: 'Hasta unos 6 minutos', corridor: 4, max: 6 },
+  { k: 'any', n: 'Lo que haga falta', d: 'Si el ahorro lo compensa', corridor: 8, max: Infinity },
+];
+const QS = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'nivel'];
 const PUMP_SVG = '<svg viewBox="0 0 24 30" aria-hidden="true"><rect x="3" y="3" width="13" height="24" rx="2" fill="var(--red)"/><rect x="5.5" y="6" width="8" height="7" rx="1" fill="#fff"/><rect x="1" y="26" width="17" height="3" rx="1" fill="var(--ink)"/><path d="M16 12h2.5q2 0 2 2v8q0 1.5 1.2 1.5T23 22V11l-3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const FLAG_SVG = '<svg viewBox="0 0 20 26" aria-hidden="true"><path d="M4 2v23" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/><path d="M5 3h12l-3 4 3 4H5z" fill="var(--ink)"/></svg>';
+const carType = () => CAR_TYPES.find((c) => c.k === state.car.type) || CAR_TYPES[1];
+const bodyPts = (t) => { const h = t.len / 2; return [[-h + 0.06, t.gc], [-h, t.gc + 0.2], [-h + 0.05, t.belt - (t.rear > -h + 0.4 ? 0.05 : 0)], [t.rear, t.belt], [t.wind, t.belt], [h - 0.14, t.nose], [h, t.nose - 0.2], [h - 0.04, t.gc]]; };
+const cabinPts = (t) => [[t.rear, t.belt], [t.rr, t.roof], [t.rf, t.roof], [t.wind, t.belt]];
 function carSVG() {
-  const t = CAR_TYPES.find((c) => c.k === state.car.type) || CAR_TYPES[1];
-  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="${t.d}" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="${t.w}" fill="#CFE3F5" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="round"/><circle cx="30" cy="38" r="8.5" fill="var(--ink)"/><circle cx="30" cy="38" r="3.5" fill="#C9CED4"/><circle cx="92" cy="38" r="8.5" fill="var(--ink)"/><circle cx="92" cy="38" r="3.5" fill="#C9CED4"/></svg>`;
+  const t = carType(), S = 22, X = (x) => (62 + x * S).toFixed(1), Y = (y) => (45 - y * S).toFixed(1);
+  const path = (pts) => 'M' + pts.map((p) => X(p[0]) + ' ' + Y(p[1])).join('L') + 'Z';
+  const wx = t.len / 2 - 0.82, wheel = (x) => `<circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S).toFixed(1)}" fill="var(--ink)"/><circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S * 0.42).toFixed(1)}" fill="#C9CED4"/>`;
+  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="${path(cabinPts(t))}" fill="#CFE3F5" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="${path(bodyPts(t))}" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>${wheel(-wx)}${wheel(wx)}</svg>`;
 }
+
+/* Modelo 3D: el perfil lateral extruido a lo ancho, con cabina de cristal, techo, ruedas y luces. */
+const car3d = { ok: false, tried: false, renderer: null, scene: null, cam: null, group: null, paint: null, raf: 0, rot: -0.65, vel: 0.006, drag: null };
+function init3D() {
+  if (car3d.tried) return car3d.ok;
+  car3d.tried = true;
+  const cv = $('car3d');
+  if (!window.THREE || !cv) return false;
+  try {
+    const T = window.THREE;
+    const renderer = new T.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    const scene = new T.Scene();
+    const cam = new T.PerspectiveCamera(30, 2, 0.1, 60);
+    cam.position.set(0, 2.5, 9.4); cam.lookAt(0, 0.75, 0);
+    scene.add(new T.HemisphereLight(0xffffff, 0x8a96a3, 1.05));
+    const sun = new T.DirectionalLight(0xffffff, 0.95); sun.position.set(4, 7, 5); scene.add(sun);
+    const cnv = document.createElement('canvas'); cnv.width = cnv.height = 128;
+    const g = cnv.getContext('2d'), gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    gr.addColorStop(0, 'rgba(0,0,0,.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    const shadow = new T.Mesh(new T.PlaneGeometry(7.4, 4.2), new T.MeshBasicMaterial({ map: new T.CanvasTexture(cnv), transparent: true, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.01; scene.add(shadow);
+    Object.assign(car3d, { renderer, scene, cam, ok: true });
+    cv.addEventListener('pointerdown', (e) => { car3d.drag = e.clientX; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener('pointermove', (e) => { if (car3d.drag == null) return; car3d.rot += (e.clientX - car3d.drag) * 0.012; car3d.drag = e.clientX; });
+    const end = () => { car3d.drag = null; };
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    build3D();
+  } catch (_) { car3d.ok = false; }
+  return car3d.ok;
+}
+function build3D() {
+  if (!car3d.ok) return;
+  const T = window.THREE, t = carType();
+  if (car3d.group) car3d.scene.remove(car3d.group);
+  const grp = new T.Group();
+  const extr = (pts, width, bevel, mat) => {
+    const sh = new T.Shape(); pts.forEach((p, i) => (i ? sh.lineTo(p[0], p[1]) : sh.moveTo(p[0], p[1])));
+    const geo = new T.ExtrudeGeometry(sh, { depth: width - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, steps: 1 });
+    geo.translate(0, 0, -(width - 2 * bevel) / 2);
+    const m = new T.Mesh(geo, mat); grp.add(m); return m;
+  };
+  car3d.paint = new T.MeshStandardMaterial({ color: state.car.color, metalness: 0.35, roughness: 0.42 });
+  const glass = new T.MeshStandardMaterial({ color: 0x1b2836, metalness: 0.7, roughness: 0.12 });
+  const dark = new T.MeshStandardMaterial({ color: 0x15181c, roughness: 0.85 });
+  const hub = new T.MeshStandardMaterial({ color: 0xc9ced4, metalness: 0.6, roughness: 0.35 });
+  extr(bodyPts(t), t.w, 0.07, car3d.paint);
+  extr(cabinPts(t), t.w * 0.86, 0.03, glass);
+  extr([[t.rr - 0.04, t.roof - 0.03], [t.rr - 0.02, t.roof + 0.05], [t.rf + 0.02, t.roof + 0.05], [t.rf + 0.04, t.roof - 0.03]], t.w * 0.88, 0.02, car3d.paint);
+  // pilares: una franja de carrocería en el centro de la cabina
+  const mid = (t.rr + t.rf) / 2;
+  extr([[mid - 0.05, t.belt], [mid - 0.05, t.roof], [mid + 0.05, t.roof], [mid + 0.05, t.belt]], t.w * 0.875, 0.01, car3d.paint);
+  const wx = t.len / 2 - 0.82;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const w = new T.Mesh(new T.CylinderGeometry(t.r, t.r, 0.26, 28), dark);
+    w.rotation.x = Math.PI / 2; w.position.set(sx * wx, t.r, sz * (t.w / 2 - 0.1)); grp.add(w);
+    const h = new T.Mesh(new T.CylinderGeometry(t.r * 0.55, t.r * 0.55, 0.275, 20), hub);
+    h.rotation.x = Math.PI / 2; h.position.copy(w.position); grp.add(h);
+  }
+  const lamp = (x, y, color) => { for (const sz of [-1, 1]) { const m = new T.Mesh(new T.BoxGeometry(0.07, 0.13, 0.36), new T.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.7 })); m.position.set(x, y, sz * t.w * 0.3); grp.add(m); } };
+  lamp(t.len / 2 - 0.03, t.nose - 0.16, 0xfff2c4);
+  lamp(-t.len / 2 + 0.01, t.belt - 0.16, 0xd5202a);
+  grp.scale.setScalar(4.6 / Math.max(4.6, t.len));
+  car3d.group = grp; car3d.scene.add(grp);
+}
+function loop3D() {
+  if (!car3d.ok) return;
+  const cv = $('car3d'), w = cv.clientWidth, h = cv.clientHeight;
+  if (w && h) {
+    if (cv.width !== Math.round(w * car3d.renderer.getPixelRatio())) { car3d.renderer.setSize(w, h, false); car3d.cam.aspect = w / h; car3d.cam.updateProjectionMatrix(); }
+    if (car3d.drag == null && !matchMedia('(prefers-reduced-motion: reduce)').matches) car3d.rot += car3d.vel;
+    car3d.group.rotation.y = car3d.rot;
+    car3d.renderer.render(car3d.scene, car3d.cam);
+  }
+  car3d.raf = requestAnimationFrame(loop3D);
+}
+function start3D() {
+  const ok = init3D();
+  $('car3d').hidden = !ok; $('car-flat').hidden = ok; $('car-hint').hidden = !ok;
+  cancelAnimationFrame(car3d.raf);
+  if (ok) loop3D();
+}
+const stop3D = () => cancelAnimationFrame(car3d.raf);
+
 function paintCar() {
   document.querySelectorAll('.veh').forEach((el) => { el.innerHTML = carSVG(); });
   document.querySelectorAll('.pump:empty').forEach((el) => { el.innerHTML = PUMP_SVG; });
@@ -473,11 +578,12 @@ function readCar() {
   const v = (id, def) => { const n = parseFloat(String($(id).value).replace(',', '.')); return Number.isFinite(n) ? n : def; };
   const tank = Math.max(5, v('deposito', 45));
   const cons = Math.max(1, v('consumo', 5.8));
+  const det = DETOURS.find((d) => d.k === state.detour) || DETOURS[1];
   return {
     cons, tank, consSafe: cons * (1 + Math.min(50, Math.max(0, v('margen', 10))) / 100),
     fuelNow: tank * v('nivel', 50) / 100,
     reserve: tank * state.frac,
-    corridor: Math.min(10, Math.max(1, v('pasillo', 4))),
+    corridor: det.corridor, maxDetour: det.max,
     timeValue: Math.max(0, v('tiempo', 6)),
     noEarly: $('temprano').checked,
   };
@@ -487,23 +593,52 @@ function readDepart() {
   const d = v ? new Date(v) : new Date();
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
+const tile = (attr, val, on, title, sub) => `<button type="button" class="tile" role="radio" aria-checked="${on}" ${attr}="${val}"><b>${title}</b>${sub ? `<small>${sub}</small>` : ''}</button>`;
 function updateGauge() {
-  const car = readCar();
+  const car = readCar(), t = carType();
+  const pct = Math.max(0.05, Math.min(1, car.fuelNow / car.tank));
   const km = Math.max(0, (car.fuelNow - car.reserve) / car.consSafe * 100);
+  const LEN = 251.3, ang = -90 + pct * 180, ta = (-180 + state.frac * 180) * Math.PI / 180;
+  $('dial').innerHTML = `<svg viewBox="0 0 200 122" role="img" aria-label="Depósito al ${fmt(pct * 100, 0)} por ciento">
+    <path d="M20 104A80 80 0 0 1 180 104" fill="none" stroke="var(--line)" stroke-width="14" stroke-linecap="round"/>
+    <path d="M20 104A80 80 0 0 1 180 104" fill="none" stroke="${car.fuelNow <= car.reserve ? 'var(--red)' : 'var(--blue)'}" stroke-width="14" stroke-linecap="round" stroke-dasharray="${(LEN * pct).toFixed(1)} ${LEN}"/>
+    <line x1="${(100 + 66 * Math.cos(ta)).toFixed(1)}" y1="${(104 + 66 * Math.sin(ta)).toFixed(1)}" x2="${(100 + 94 * Math.cos(ta)).toFixed(1)}" y2="${(104 + 94 * Math.sin(ta)).toFixed(1)}" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>
+    <g transform="rotate(${ang.toFixed(1)} 100 104)"><path d="M100 104V40" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/></g><circle cx="100" cy="104" r="7" fill="var(--ink)"/>
+    <text x="16" y="120" class="dl">R</text><text x="184" y="120" text-anchor="end" class="dl">Lleno</text></svg>`;
   $('nivel-out').textContent = `${fmt(car.fuelNow, 0)} L`;
-  $('umbral').innerHTML = THRESHOLDS.map((t) => `<button type="button" class="chip" role="radio" aria-checked="${Math.abs(t.f - state.frac) < 0.01}" data-f="${t.f}">${t.n}</button>`).join('');
+  $('fuels').innerHTML = FUELS.map((f) => tile('data-k', f.k, f.k === state.fuel, f.n)).join('');
+  $('umbral').innerHTML = THRESHOLDS.map((x) => tile('data-f', x.f, Math.abs(x.f - state.frac) < 0.01, x.n, `${x.d} · unos ${fmt(car.tank * x.f, 0)} L`)).join('');
+  $('desvio').innerHTML = DETOURS.map((d) => tile('data-d', d.k, d.k === state.detour, d.n, d.d)).join('');
+  $('tipico').innerHTML = `Lo normal en un ${t.k === 'suv' ? 'SUV' : t.n.toLowerCase()}: ${fmt(t.cons, 1)} L/100 km y ${t.tank} L. <button type="button" class="linkbtn inline" id="btn-tipico">Usar estos</button>`;
   $('umbral-out').textContent = car.fuelNow <= car.reserve
-    ? `Ya estás por debajo de ${fmt(car.reserve, 0)} L: te buscaré la primera gasolinera que encuentres.`
-    : `Buscaré parada antes de que bajes de ${fmt(car.reserve, 0)} L. Con lo que llevas, eso son unos ${fmt(km, 0)} km.`;
+    ? `Ya estás por debajo de tu límite (${fmt(car.reserve, 0)} L, la marca roja): te buscaré la primera gasolinera que encuentres.`
+    : `Tienes unos ${fmt(km, 0)} km antes de bajar de tu límite (${fmt(car.reserve, 0)} L, la marca roja).`;
+  const fuelName = FUELS.find((f) => f.k === state.fuel).n, thr = THRESHOLDS.find((x) => Math.abs(x.f - state.frac) < 0.01) || THRESHOLDS[0], det = DETOURS.find((d) => d.k === state.detour) || DETOURS[1];
+  $('car-sum').textContent = `${t.n} · ${fuelName} · ${fmt(car.cons, 1)} L/100 km · ${fmt(car.tank, 0)} L · reposto ${thr.n.toLowerCase()} · ${det.n.toLowerCase()}`;
+}
+function showQ(i, dir = 1) {
+  state.q = i;
+  document.querySelectorAll('#deck .qcard').forEach((c) => {
+    const on = c.dataset.q === QS[i];
+    c.hidden = !on;
+    if (on) { c.classList.remove('in-f', 'in-b'); void c.offsetWidth; c.classList.add(dir >= 0 ? 'in-f' : 'in-b'); }
+  });
+  $('dots').innerHTML = QS.map((q, k) => `<i class="${k === i ? 'on' : k < i ? 'done' : ''}"></i>`).join('');
+  $('btn-next').textContent = i < QS.length - 1 ? 'Siguiente' : 'Buscar mi parada';
+  $('btn-editcar').hidden = !(state.carDone && !state.editing);
+  if (QS[i] === 'coche') start3D(); else stop3D();
+  updateGauge();
+  window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
-const FIELDS = ['consumo', 'deposito', 'nivel', 'pasillo', 'tiempo', 'margen'];
+const FIELDS = ['consumo', 'deposito', 'nivel', 'tiempo', 'margen'];
 function save() {
   try {
     localStorage.setItem('ruta95', JSON.stringify({
       fuel: state.fuel, ...Object.fromEntries(FIELDS.map((k) => [k, $(k).value])),
       discounts: state.discounts, skin: document.documentElement.dataset.skin || '',
-      car: state.car, frac: state.frac, avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, recents: state.recents,
+      car: state.car, frac: state.frac, detour: state.detour, carDone: state.carDone,
+      avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, recents: state.recents,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
       stops: state.stops.filter((x) => x.place).map((x) => x.place),
     }));
@@ -516,17 +651,16 @@ function restore() {
     if (FUELS.some((f) => f.k === d.fuel)) state.fuel = d.fuel;
     for (const k of FIELDS) if (d[k] != null && d[k] !== '') $(k).value = d[k];
     if (d.discounts && typeof d.discounts === 'object') state.discounts = d.discounts;
-    if (d.car && CAR_TYPES.some((t) => t.k === d.car.type) && CAR_COLORS.includes(d.car.color)) state.car = d.car;
+    if (d.car && CAR_COLORS.includes(d.car.color)) state.car = { type: CAR_TYPES.some((t) => t.k === d.car.type) ? d.car.type : 'com', color: d.car.color };
     if (THRESHOLDS.some((t) => Math.abs(t.f - d.frac) < 0.01)) state.frac = d.frac;
+    if (DETOURS.some((x) => x.k === d.detour)) state.detour = d.detour;
+    state.carDone = !!d.carDone;
     $('peajes').checked = !!d.avoidTolls; $('temprano').checked = !!d.noEarly;
     if (Array.isArray(d.recents)) state.recents = d.recents.slice(0, 5);
     if (d.origin) { state.origin = d.origin; $('origen').value = d.origin.name; }
     if (d.dest) { state.dest = d.dest; $('destino').value = d.dest.name; }
     if (Array.isArray(d.stops)) state.stops = d.stops.slice(0, MAX_STOPS).map((pl) => ({ place: pl, text: pl.name }));
   } catch (_) { /* sin almacenamiento */ }
-}
-function renderFuels() {
-  $('fuels').innerHTML = FUELS.map((f) => `<button type="button" class="chip" role="radio" aria-checked="${f.k === state.fuel}" data-k="${f.k}">${f.n}</button>`).join('');
 }
 function renderDiscounts() {
   $('discounts').innerHTML = BRANDS.map((b) => `<div class="numfield"><label for="d-${b.k}">${b.n}</label>
@@ -820,10 +954,11 @@ function renderResult() {
     const e = P.earlyBest.stops[0];
     infos.push(`Si no te importara parar en la primera hora, en el km ${fmt(e.km, 0)} (${esc(stName(e))}, ${esc(stTown(e))}) ahorrarías ${eur(P.earlyBest.net - ch.net)} más.`);
   } else if (P.car.noEarly && ch.stops[0].early) infos.push('No hay parada posible después de la primera hora, así que te propongo una antes.');
+  if (P.detourRelaxed) infos.push('Ninguna parada cumple tu límite de desvío, así que te propongo la mejor de las que hay.');
   if (P.closed) infos.push(`${P.closed} ${P.closed === 1 ? 'gasolinera descartada porque estará cerrada' : 'gasolineras descartadas porque estarán cerradas'} cuando pases.`);
   $('t-plan').innerHTML = `${warns.length ? `<div class="note">${warns.map((w) => `<p>${w}</p>`).join('')}</div>` : ''}
     <article class="card best">
-      <div class="verdict ${gain ? '' : 'zero'}"><span>${where}</span><b>${gain ? '' : '−'}${eur(Math.abs(ch.net))}<small>${gain ? 'de ahorro' : 'de sobrecoste'}</small></b></div>
+      <div class="verdict ${gain ? '' : 'zero'}"><span>${where}</span><b>${gain ? '' : '−'}<span class="count" data-to="${Math.abs(ch.net).toFixed(2)}">${eur(Math.abs(ch.net))}</span><small>${gain ? 'de ahorro' : 'de sobrecoste'}</small></b></div>
       ${ch.legs.map((l, i) => renderStopBlock(l, i + 1, n)).join('<hr class="sep">')}
       <p class="why">${why}</p>
       <a class="go" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir con ${n > 1 ? 'estas paradas' : 'esta parada'} en Google Maps</a>
@@ -842,6 +977,13 @@ function renderResult() {
   $('t-otras').innerHTML = renderList(P);
   state.mapDirty = true;
   showTab('plan');
+  // El ahorro se cuenta hacia arriba al aparecer
+  const el = document.querySelector('.count');
+  if (el && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const to = +el.dataset.to, t0 = performance.now();
+    const tick = (now) => { const k = Math.min(1, (now - t0) / 800), e = 1 - Math.pow(1 - k, 3); el.textContent = eur(to * e); if (k < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
 }
 
 function renderMap() {
@@ -879,7 +1021,7 @@ function renderMap() {
 }
 function showTab(name) {
   document.querySelectorAll('#tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === name));
-  for (const t of ['plan', 'precios', 'mapa', 'otras']) $('t-' + t).hidden = t !== name;
+  for (const t of ['plan', 'precios', 'mapa', 'otras']) { const el = $('t-' + t); el.hidden = t !== name; if (t === name) { el.classList.remove('in-f'); void el.offsetWidth; el.classList.add('in-f'); } }
   if (name === 'mapa') { if (state.mapDirty || !state.map) renderMap(); else state.map.invalidateSize(); }
 }
 function showOnMap(id) {
@@ -894,6 +1036,7 @@ function showOnMap(id) {
 const NEXT_LABEL = ['Ver el camino', 'Elegir esta ruta', 'Buscar mi parada', 'Nueva búsqueda'];
 const STEP_NAMES = ['Gasolineras de la ruta', 'Desvíos reales', 'Mejor plan'];
 function go(i) {
+  const prev = state.panel;
   state.panel = i;
   state.maxPanel = Math.max(state.maxPanel, i);
   for (let k = 0; k < 4; k++) $('p' + k).hidden = k !== i;
@@ -907,7 +1050,8 @@ function go(i) {
   $('btn-next').textContent = NEXT_LABEL[i];
   status('');
   if (i === 1) renderRoutes();
-  if (i === 2) { paintCar(); updateGauge(); }
+  const pan = $('p' + i); pan.classList.remove('in-f', 'in-b'); void pan.offsetWidth; pan.classList.add(i >= prev ? 'in-f' : 'in-b');
+  if (i === 2) { paintCar(); showQ(state.carDone && !state.editing ? QS.length - 1 : state.q || 0, i >= prev ? 1 : -1); } else stop3D();
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
 function progress(i) {
@@ -917,7 +1061,7 @@ function busy(on, label) {
   const b = $('btn-next');
   b.disabled = on;
   if (on && label) b.textContent = label;
-  if (!on) b.textContent = NEXT_LABEL[state.panel];
+  if (!on) b.textContent = state.panel === 2 && state.q < QS.length - 1 ? 'Siguiente' : NEXT_LABEL[state.panel];
 }
 const fail = (e) => status(e && e.name === 'AbortError' ? 'El servidor tarda demasiado. Prueba otra vez.' : (e && e.message) || 'Algo ha fallado. Prueba otra vez.', true);
 
@@ -964,7 +1108,7 @@ async function stepCompute() {
 
 function init() {
   restore();
-  renderFuels(); renderDiscounts(); paintCar(); updateGauge(); updateWhen();
+  renderDiscounts(); paintCar(); updateGauge(); updateWhen();
   setupPlace($('origen'), $('sugg-origen'), (pl) => { state.origin = pl; });
   setupPlace($('destino'), $('sugg-destino'), (pl) => { state.dest = pl; });
   renderStops();
@@ -975,10 +1119,16 @@ function init() {
   $('btn-next').addEventListener('click', () => {
     if (state.panel === 0) stepRoute();
     else if (state.panel === 1) go(2);
-    else if (state.panel === 2) { save(); stepCompute(); }
+    else if (state.panel === 2) {
+      if (state.q < QS.length - 1) showQ(state.q + 1, 1);
+      else { state.carDone = true; state.editing = false; save(); stepCompute(); }
+    }
     else { state.maxPanel = 0; go(0); }
   });
-  $('btn-back').addEventListener('click', () => go(Math.max(0, state.panel - 1)));
+  $('btn-back').addEventListener('click', () => {
+    if (state.panel === 2 && state.q > 0 && !(state.carDone && !state.editing)) return showQ(state.q - 1, -1);
+    go(Math.max(0, state.panel - 1));
+  });
   $('wiz').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b && !b.disabled) go(+b.dataset.go); });
   $('alts').addEventListener('click', (e) => { const b = e.target.closest('[data-alt]'); if (b) { state.alt = +b.dataset.alt; state.plan = null; renderRoutes(); } });
 
@@ -1009,10 +1159,23 @@ function init() {
   $('peajes').addEventListener('change', save);
   $('temprano').addEventListener('change', save);
 
-  $('fuels').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (b) { state.fuel = b.dataset.k; renderFuels(); save(); } });
-  $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; paintCar(); save(); } });
-  $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); save(); } });
-  $('umbral').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { state.frac = +b.dataset.f; updateGauge(); save(); } });
+  const auto = () => setTimeout(() => { if (state.panel === 2 && state.q < QS.length - 1) showQ(state.q + 1, 1); }, 260);
+  $('fuels').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) { state.fuel = b.dataset.k; updateGauge(); save(); auto(); } });
+  $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; paintCar(); build3D(); updateGauge(); save(); } });
+  $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); if (car3d.paint) car3d.paint.color.set(state.car.color); save(); } });
+  $('umbral').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { state.frac = +b.dataset.f; updateGauge(); save(); auto(); } });
+  $('desvio').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) { state.detour = b.dataset.d; updateGauge(); save(); auto(); } });
+  $('deck').addEventListener('click', (e) => {
+    const st = e.target.closest('[data-step]');
+    if (st) {
+      const [id, d] = st.dataset.step.split(':'), el = $(id);
+      const v = Math.min(+el.max, Math.max(+el.min, (parseFloat(el.value) || 0) + +d));
+      el.value = id === 'consumo' ? v.toFixed(1) : String(Math.round(v));
+      updateGauge(); save(); return;
+    }
+    if (e.target.closest('#btn-tipico')) { const t = carType(); $('consumo').value = t.cons.toFixed(1); $('deposito').value = t.tank; updateGauge(); save(); return; }
+    if (e.target.closest('#btn-editcar')) { state.editing = true; showQ(0, -1); }
+  });
   $('discounts').addEventListener('input', (e) => {
     const k = e.target.dataset.brand;
     if (!k) return;
@@ -1020,7 +1183,8 @@ function init() {
     if (n > 0) state.discounts[k] = Math.min(50, n); else delete state.discounts[k];
     save();
   });
-  for (const id of FIELDS) $(id).addEventListener('input', () => { updateGauge(); save(); });
+  for (const id of FIELDS) $(id).addEventListener('input', () => { if (id === 'nivel') updateGauge(); save(); });
+  for (const id of ['consumo', 'deposito']) $(id).addEventListener('change', () => { updateGauge(); });
 
   const paintSkins = () => { const cur = document.documentElement.dataset.skin || ''; document.querySelectorAll('[data-skin-btn]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.skinBtn === cur)); };
   paintSkins();

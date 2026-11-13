@@ -39,6 +39,7 @@ def handle(route):
         D=[[hav((pts[s][1],pts[s][0]),(pts[d][1],pts[d][0]))*1300 for d in dst] for s in src]
         return route.fulfill(json={"code":"Ok","distances":D,"durations":[[x/1000/70*3600 for x in row] for row in D]})
     if 'photon' in u or 'nominatim' in u: return route.fulfill(json={"features":[]} if 'photon' in u else [])
+    if 'three.min.js' in u: return route.fulfill(path='/tmp/t/node_modules/three/build/three.min.js')
     if 'leaflet.min.js' in u: return route.fulfill(path='/tmp/t/node_modules/leaflet/dist/leaflet.js')
     if 'leaflet.min.css' in u: return route.fulfill(path='/tmp/t/node_modules/leaflet/dist/leaflet.css')
     if '127.0.0.1' in u: return route.continue_()
@@ -59,8 +60,14 @@ with sync_playwright() as p:
         pg.screenshot(path=f'{OUT}/w1-{scheme}.png')
         pg.click('#btn-next'); pg.wait_for_selector('#alts button'); pg.wait_for_timeout(500)
         alts=pg.locator('#alts button').all_inner_texts(); pg.screenshot(path=f'{OUT}/w2-{scheme}.png')
-        pg.click('#btn-next'); pg.click('[data-type="l"]'); pg.click('[data-color="#D5202A"]'); pg.click('[data-f="0.25"]'); pg.check('#temprano'); pg.wait_for_timeout(200)
-        pg.screenshot(path=f'{OUT}/w3-{scheme}.png', full_page=True)
+        pg.click('#btn-next'); pg.wait_for_timeout(900); pg.click('[data-type="suv"]'); pg.click('[data-color="#D5202A"]'); pg.wait_for_timeout(700)
+        pg.screenshot(path=f'{OUT}/q0-{scheme}.png')
+        pg.click('#btn-next'); pg.wait_for_timeout(400); pg.screenshot(path=f'{OUT}/q1-{scheme}.png'); pg.click('[data-k="g95"]'); pg.wait_for_timeout(700)
+        pg.screenshot(path=f'{OUT}/q2-{scheme}.png'); pg.click('[data-step="consumo:0.1"]'); pg.click('#btn-next'); pg.wait_for_timeout(400)
+        pg.screenshot(path=f'{OUT}/q3-{scheme}.png'); pg.check('#temprano'); pg.click('[data-f="0.25"]'); pg.wait_for_timeout(700)
+        pg.screenshot(path=f'{OUT}/q4-{scheme}.png'); pg.click('[data-d="short"]'); pg.wait_for_timeout(700)
+        pg.screenshot(path=f'{OUT}/q5-{scheme}.png')
+        if scheme=='light': print('3d ok:', pg.evaluate('()=>car3d.ok'), 'q', pg.evaluate('()=>state.q'), 'cons', pg.evaluate("()=>document.getElementById('consumo').value"))
         pg.click('#btn-next'); pg.wait_for_selector('.best', timeout=20000); pg.wait_for_timeout(1800)
         pg.screenshot(path=f'{OUT}/w4-{scheme}.png')
         if scheme=='light':
@@ -68,6 +75,6 @@ with sync_playwright() as p:
             for t in ['precios','mapa','otras']:
                 pg.click(f'[data-tab="{t}"]'); pg.wait_for_timeout(500); pg.screenshot(path=f'{OUT}/w4-{t}.png')
             pg.click('[data-show]'); pg.wait_for_timeout(400); print('popup', pg.locator('.leaflet-popup-content').count())
-            pg.click('#btn-back'); pg.click('#btn-back'); pg.click('[data-alt="1"]'); pg.click('#btn-next'); pg.click('#btn-next'); pg.wait_for_selector('.best'); pg.wait_for_timeout(1500); print(pg.evaluate(DUMP))
+            pg.click('#btn-back'); pg.wait_for_timeout(300); print('atajo q', pg.evaluate('()=>state.q')); pg.click('#btn-back'); pg.click('[data-alt="1"]'); pg.click('#btn-next'); pg.wait_for_timeout(300); pg.click('#btn-next'); pg.wait_for_selector('.best'); pg.wait_for_timeout(1500); print(pg.evaluate(DUMP))
         print(scheme,'errors:',errs)
     b.close()
