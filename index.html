@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script>try{var k=JSON.parse(localStorage.getItem("ruta95")||"{}").skin;if(k)document.documentElement.dataset.skin=k}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=8">
+<link rel="stylesheet" href="app.css?v=12">
 </head>
 <body>
 <main class="wrap">
@@ -93,6 +93,7 @@
       <section class="qcard card" data-q="coche">
         <h2 class="ptitle">¿Cómo es tu coche?</h2>
         <div class="viewer"><canvas id="car3d"></canvas><div class="veh flat" id="car-flat" hidden></div></div>
+        <p class="eg" id="car-eg"></p>
         <p class="hint center" id="car-hint">Arrástralo para girarlo</p>
         <div class="chips" id="car-types" role="radiogroup" aria-label="Carrocería"></div>
         <div class="swatches" id="car-colors" role="radiogroup" aria-label="Color"></div>
@@ -186,6 +187,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=9"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

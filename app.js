@@ -203,7 +203,7 @@ function evalPlan(stops, modes, P, strict = true) {
     fuel = Math.max(0, fuel) + L; safe = Math.min(car.tank, Math.max(0, safe) + L);
     const cost = s.detourKm * c * s.price;
     gross += (P.ref - s.price) * L; detCost += cost; detMin += s.detourMin; litres += L;
-    legs.push({ s, L, full: L >= room - 0.5, detCost: cost });
+    legs.push({ s, L, full: L >= room - 0.5, detCost: cost, arrive: Math.max(0, fuel - L), pay: L * s.price });
     pos = s.km; prevDet = s.detourKm;
   }
   const last = Math.max(0, P.D - pos) + prevDet / 2;
@@ -211,7 +211,7 @@ function evalPlan(stops, modes, P, strict = true) {
   const complete = endSafe >= car.reserve - 0.01;
   if (strict && !complete) return null;
   const net = gross - detCost;
-  return { legs, stops, gross, detCost, detMin, litres, net, complete,
+  return { legs, stops, gross, detCost, detMin, litres, net, complete, endFuel: Math.max(0, fuel - last * c), pay: legs.reduce((a, l) => a + l.pay, 0),
     score: net - (detMin + STOP_MIN * stops.length) * car.timeValue / 60 };
 }
 
@@ -454,14 +454,15 @@ async function refineDetours(P) {
 }
 
 /* ---------- Interfaz: coche y preguntas ---------- */
-/* Cada carrocería se describe con su perfil lateral en metros; de ahí salen el dibujo 2D y el modelo 3D. */
+/* Cada carrocería se describe con medidas reales en metros (x: 0 en el centro, positivo hacia el morro).
+   De esas medidas salen el perfil lateral, el dibujo 2D y el modelo 3D, todos a la misma escala. */
 const CAR_TYPES = [
-  { k: 'urb', n: 'Urbano', len: 3.4, w: 1.62, gc: 0.24, belt: 0.86, roof: 1.5, wind: 0.95, rf: 0.45, rr: -1.4, rear: -1.62, nose: 0.72, r: 0.29, cons: 5.0, tank: 35 },
-  { k: 'com', n: 'Compacto', len: 4.1, w: 1.78, gc: 0.22, belt: 0.82, roof: 1.42, wind: 1.0, rf: 0.35, rr: -1.45, rear: -1.95, nose: 0.66, r: 0.31, cons: 5.8, tank: 45 },
-  { k: 'ber', n: 'Berlina', len: 4.7, w: 1.82, gc: 0.2, belt: 0.8, roof: 1.38, wind: 1.05, rf: 0.3, rr: -0.95, rear: -1.7, nose: 0.64, r: 0.32, cons: 6.2, tank: 55 },
-  { k: 'suv', n: 'SUV', len: 4.5, w: 1.88, gc: 0.34, belt: 1.02, roof: 1.68, wind: 1.1, rf: 0.5, rr: -1.8, rear: -2.12, nose: 0.92, r: 0.38, cons: 7.2, tank: 58 },
-  { k: 'fur', n: 'Furgoneta', len: 4.9, w: 1.95, gc: 0.26, belt: 1.05, roof: 1.95, wind: 1.95, rf: 1.4, rr: -2.3, rear: -2.4, nose: 0.9, r: 0.34, cons: 8.0, tank: 70 },
-  { k: 'dep', n: 'Deportivo', len: 4.4, w: 1.86, gc: 0.17, belt: 0.68, roof: 1.17, wind: 0.75, rf: -0.05, rr: -0.85, rear: -1.85, nose: 0.5, r: 0.34, cons: 8.5, tank: 55 },
+  { k: 'urb', n: 'Urbano', eg: 'El más pequeño, de ciudad', len: 3.67, w: 1.68, gc: 0.2, belt: 0.93, roof: 1.48, wind: 0.98, rf: 0.38, rr: -1.2, rear: -1.7, nose: 0.8, r: 0.29, cons: 5.0, tank: 35 },
+  { k: 'com', n: 'Compacto', eg: 'El tamaño más habitual', len: 4.25, w: 1.79, gc: 0.19, belt: 0.9, roof: 1.45, wind: 1.08, rf: 0.32, rr: -1.3, rear: -1.98, nose: 0.77, r: 0.32, cons: 5.8, tank: 45 },
+  { k: 'ber', n: 'Berlina', eg: 'Larga y con maletero', len: 4.75, w: 1.84, gc: 0.18, belt: 0.88, roof: 1.43, wind: 1.12, rf: 0.28, rr: -0.72, rear: -1.52, nose: 0.74, r: 0.33, deck: 1, cons: 6.2, tank: 55 },
+  { k: 'suv', n: 'SUV', eg: 'Alto y con más distancia al suelo', len: 4.5, w: 1.87, gc: 0.3, belt: 1.08, roof: 1.67, wind: 1.16, rf: 0.45, rr: -1.55, rear: -2.08, nose: 1.0, r: 0.37, clad: 1, cons: 7.2, tank: 58 },
+  { k: 'fur', n: 'Furgoneta', eg: 'La más grande y alta', len: 4.95, w: 1.93, gc: 0.24, belt: 1.1, roof: 1.92, wind: 1.98, rf: 1.4, rr: -2.24, rear: -2.4, nose: 0.98, r: 0.34, cons: 8.0, tank: 70 },
+  { k: 'dep', n: 'Deportivo', eg: 'Bajo y ancho', len: 4.4, w: 1.86, gc: 0.15, belt: 0.78, roof: 1.27, wind: 0.86, rf: -0.05, rr: -0.72, rear: -1.72, nose: 0.62, r: 0.34, deck: 1, cons: 8.5, tank: 55 },
 ];
 const CAR_COLORS = ['#F2F2F2', '#22262B', '#8A9199', '#D5202A', '#1F5FBF', '#2E7D4F', '#F2B705', '#18A0A8'];
 const THRESHOLDS = [{ f: 0.12, n: 'En reserva', d: 'Apuro el depósito' }, { f: 0.25, n: 'A un cuarto', d: 'Lo habitual' }, { f: 1 / 3, n: 'A un tercio', d: 'Con margen' }, { f: 0.5, n: 'A medio depósito', d: 'No me la juego' }];
@@ -474,17 +475,36 @@ const QS = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'nivel'];
 const PUMP_SVG = '<svg viewBox="0 0 24 30" aria-hidden="true"><rect x="3" y="3" width="13" height="24" rx="2" fill="var(--red)"/><rect x="5.5" y="6" width="8" height="7" rx="1" fill="#fff"/><rect x="1" y="26" width="17" height="3" rx="1" fill="var(--ink)"/><path d="M16 12h2.5q2 0 2 2v8q0 1.5 1.2 1.5T23 22V11l-3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const FLAG_SVG = '<svg viewBox="0 0 20 26" aria-hidden="true"><path d="M4 2v23" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/><path d="M5 3h12l-3 4 3 4H5z" fill="var(--ink)"/></svg>';
 const carType = () => CAR_TYPES.find((c) => c.k === state.car.type) || CAR_TYPES[1];
-const bodyPts = (t) => { const h = t.len / 2; return [[-h + 0.06, t.gc], [-h, t.gc + 0.2], [-h + 0.05, t.belt - (t.rear > -h + 0.4 ? 0.05 : 0)], [t.rear, t.belt], [t.wind, t.belt], [h - 0.14, t.nose], [h, t.nose - 0.2], [h - 0.04, t.gc]]; };
-const cabinPts = (t) => [[t.rear, t.belt], [t.rr, t.roof], [t.rf, t.roof], [t.wind, t.belt]];
+
+/* Perfil lateral suavizado: altura de la carrocería H(x) y del techo R(x), muestreadas a lo largo del coche. */
+function carProfile(t, N = 96) {
+  const h = t.len / 2;
+  const lin = (keys, x) => { if (x <= keys[0][0]) return keys[0][1]; for (let i = 0; i < keys.length - 1; i++) if (x <= keys[i + 1][0]) { const k = (x - keys[i][0]) / (keys[i + 1][0] - keys[i][0]); return keys[i][1] + (keys[i + 1][1] - keys[i][1]) * k; } return keys[keys.length - 1][1]; };
+  const deckH = t.deck ? t.belt - 0.05 : t.belt - 0.01;
+  const bodyK = [[-h, deckH - 0.3], [-h + 0.1, deckH - 0.02], [t.rear, t.belt], [t.wind, t.belt + 0.03], [h - 0.2, t.nose], [h - 0.03, t.nose - 0.14], [h, t.nose - 0.3]];
+  const roofK = [[t.rear, t.belt], [t.rr, t.roof], [(t.rr + t.rf) / 2, t.roof + 0.02], [t.rf, t.roof], [t.wind, t.belt + 0.03]];
+  const xs = [], H = [], R = [];
+  for (let i = 0; i <= N; i++) { const x = -h + (t.len * i) / N; xs.push(x); H.push(lin(bodyK, x)); R.push(x >= t.rear && x <= t.wind ? lin(roofK, x) : 0); }
+  const blur = (a, keep) => a.map((v, i) => { if (keep && keep(i)) return v; let s = 0, n = 0; for (let d = -2; d <= 2; d++) { const j = i + d; if (j >= 0 && j < a.length) { s += a[j]; n++; } } return s / n; });
+  const inCab = (i) => xs[i] < t.rear || xs[i] > t.wind;
+  let Hs = blur(blur(H)), Rs = blur(blur(R, inCab), inCab);
+  Rs = Rs.map((v, i) => (inCab(i) ? 0 : Math.max(v, Hs[i])));
+  const hw = xs.map((x) => { const d = Math.min(h - x, x + h); const sm = (k) => k * k * (3 - 2 * k); return (t.w / 2) * (0.8 + 0.2 * sm(Math.min(1, d / 0.6))) * (0.72 + 0.28 * Math.sqrt(Math.min(1, d / 0.12))); });
+  const bot = xs.map((x) => { const d = Math.min(h - x, x + h); return t.gc + 0.12 * (1 - Math.min(1, d / 0.35)) ** 2; });
+  return { xs, H: Hs, R: Rs, hw, bot, h };
+}
 function carSVG() {
-  const t = carType(), S = 22, X = (x) => (62 + x * S).toFixed(1), Y = (y) => (45 - y * S).toFixed(1);
-  const path = (pts) => 'M' + pts.map((p) => X(p[0]) + ' ' + Y(p[1])).join('L') + 'Z';
-  const wx = t.len / 2 - 0.82, wheel = (x) => `<circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S).toFixed(1)}" fill="var(--ink)"/><circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S * 0.42).toFixed(1)}" fill="#C9CED4"/>`;
-  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="${path(cabinPts(t))}" fill="#CFE3F5" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="${path(bodyPts(t))}" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>${wheel(-wx)}${wheel(wx)}</svg>`;
+  const t = carType(), p = carProfile(t, 48), S = 22, X = (x) => (62 + x * S).toFixed(1), Y = (y) => (45 - y * S).toFixed(1);
+  const top = p.xs.map((x, i) => `${X(x)} ${Y(p.H[i])}`), bottom = p.xs.map((x, i) => `${X(x)} ${Y(p.bot[i])}`).reverse();
+  const cab = p.xs.map((x, i) => (p.R[i] > p.H[i] + 0.005 ? `${X(x)} ${Y(p.R[i])}` : null)).filter(Boolean);
+  const cabBase = p.xs.map((x, i) => (p.R[i] > p.H[i] + 0.005 ? `${X(x)} ${Y(p.H[i])}` : null)).filter(Boolean).reverse();
+  const wf = p.h - 0.82, wr = -p.h + 0.8;
+  const wheel = (x) => `<circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S).toFixed(1)}" fill="var(--ink)"/><circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S * 0.45).toFixed(1)}" fill="#C9CED4"/>`;
+  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="M${[...cab, ...cabBase].join('L')}Z" fill="#CFE3F5" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="M${[...top, ...bottom].join('L')}Z" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>${wheel(wr)}${wheel(wf)}</svg>`;
 }
 
-/* Modelo 3D: el perfil lateral extruido a lo ancho, con cabina de cristal, techo, ruedas y luces. */
-const car3d = { ok: false, tried: false, renderer: null, scene: null, cam: null, group: null, paint: null, raf: 0, rot: -0.65, vel: 0.006, drag: null };
+/* Modelo 3D: la carrocería y la cabina son superficies lisas generadas por secciones a lo largo del coche. */
+const car3d = { ok: false, tried: false, renderer: null, scene: null, cam: null, group: null, raf: 0, rot: -0.7, vel: 0.006, drag: null };
 function init3D() {
   if (car3d.tried) return car3d.ok;
   car3d.tried = true;
@@ -495,16 +515,17 @@ function init3D() {
     const renderer = new T.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     const scene = new T.Scene();
-    const cam = new T.PerspectiveCamera(30, 2, 0.1, 60);
-    cam.position.set(0, 2.5, 9.4); cam.lookAt(0, 0.75, 0);
-    scene.add(new T.HemisphereLight(0xffffff, 0x8a96a3, 1.05));
-    const sun = new T.DirectionalLight(0xffffff, 0.95); sun.position.set(4, 7, 5); scene.add(sun);
+    const cam = new T.PerspectiveCamera(27, 2, 0.1, 60);
+    cam.position.set(0, 2.6, 9.6); cam.lookAt(0, 0.7, 0);
+    scene.add(new T.HemisphereLight(0xffffff, 0x77838f, 0.85));
+    const sun = new T.DirectionalLight(0xffffff, 0.95); sun.position.set(3, 7, 6); scene.add(sun);
+    const fill = new T.DirectionalLight(0xdfe9ff, 0.4); fill.position.set(-6, 3, -4); scene.add(fill);
     const cnv = document.createElement('canvas'); cnv.width = cnv.height = 128;
     const g = cnv.getContext('2d'), gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
-    gr.addColorStop(0, 'rgba(0,0,0,.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
-    const shadow = new T.Mesh(new T.PlaneGeometry(7.4, 4.2), new T.MeshBasicMaterial({ map: new T.CanvasTexture(cnv), transparent: true, depthWrite: false }));
-    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.01; scene.add(shadow);
+    car3d.shadow = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: new T.CanvasTexture(cnv), transparent: true, depthWrite: false }));
+    car3d.shadow.rotation.x = -Math.PI / 2; car3d.shadow.position.y = 0.01; scene.add(car3d.shadow);
     Object.assign(car3d, { renderer, scene, cam, ok: true });
     cv.addEventListener('pointerdown', (e) => { car3d.drag = e.clientX; cv.setPointerCapture(e.pointerId); });
     cv.addEventListener('pointermove', (e) => { if (car3d.drag == null) return; car3d.rot += (e.clientX - car3d.drag) * 0.012; car3d.drag = e.clientX; });
@@ -514,38 +535,84 @@ function init3D() {
   } catch (_) { car3d.ok = false; }
   return car3d.ok;
 }
+/* Superficie cerrada a partir de anillos: section(i) da {yb, yt, hwb, hwt}; color(i, u, v) el color de cada vértice. */
+function loft(T, xs, section, color, rho, rhoU = rho) {
+  // Anillo unitario: rectángulo redondeado con puntos repartidos por igual en lados y esquinas, para que los colores queden nítidos
+  const ring = [], SIDE = 7, CORNER = 5, cu = 1 - rhoU, cv = 1 - rho;
+  const corners = [[cu, -cv, -Math.PI / 2], [cu, cv, 0], [-cu, cv, Math.PI / 2], [-cu, -cv, Math.PI]];
+  corners.forEach(([cx, cy, a0], q) => {
+    for (let k = 0; k < CORNER; k++) { const a = a0 + (Math.PI / 2) * (k / (CORNER - 1)); ring.push([cx + rhoU * Math.cos(a), cy + rho * Math.sin(a)]); }
+    const [nx, ny, na] = corners[(q + 1) % 4], p0 = [cx + rhoU * Math.cos(a0 + Math.PI / 2), cy + rho * Math.sin(a0 + Math.PI / 2)], p1 = [nx + rhoU * Math.cos(na), ny + rho * Math.sin(na)];
+    for (let k = 1; k < SIDE; k++) ring.push([p0[0] + (p1[0] - p0[0]) * (k / SIDE), p0[1] + (p1[1] - p0[1]) * (k / SIDE)]);
+  });
+  const M = ring.length;
+  const pos = [], col = [], idx = [], c = new T.Color();
+  xs.forEach((x, i) => {
+    const s = section(i);
+    for (let j = 0; j < M; j++) {
+      const u = ring[j][0], v = ring[j][1], k = (v + 1) / 2;
+      pos.push(x, s.yb + (s.yt - s.yb) * k, (s.hwb + (s.hwt - s.hwb) * k) * u);
+      c.set(color(i, u, v)); col.push(c.r, c.g, c.b);
+    }
+  });
+  for (let i = 0; i < xs.length - 1; i++) for (let j = 0; j < M; j++) {
+    const a = i * M + j, b = i * M + ((j + 1) % M), d = (i + 1) * M + j, e = (i + 1) * M + ((j + 1) % M);
+    idx.push(a, d, b, b, d, e);
+  }
+  for (const [ring, flip] of [[0, false], [xs.length - 1, true]]) {
+    const s = section(ring), ci = pos.length / 3;
+    pos.push(xs[ring], (s.yb + s.yt) / 2, 0); c.set(color(ring, 0, 0)); col.push(c.r, c.g, c.b);
+    for (let j = 0; j < M; j++) { const a = ring * M + j, b = ring * M + ((j + 1) % M); if (flip) idx.push(ci, b, a); else idx.push(ci, a, b); }
+  }
+  const geo = new T.BufferGeometry();
+  geo.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+  geo.setIndex(idx); geo.computeVertexNormals();
+  return geo;
+}
 function build3D() {
   if (!car3d.ok) return;
-  const T = window.THREE, t = carType();
+  const T = window.THREE, t = carType(), p = carProfile(t, 96), paint = state.car.color;
   if (car3d.group) car3d.scene.remove(car3d.group);
   const grp = new T.Group();
-  const extr = (pts, width, bevel, mat) => {
-    const sh = new T.Shape(); pts.forEach((p, i) => (i ? sh.lineTo(p[0], p[1]) : sh.moveTo(p[0], p[1])));
-    const geo = new T.ExtrudeGeometry(sh, { depth: width - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, steps: 1 });
-    geo.translate(0, 0, -(width - 2 * bevel) / 2);
-    const m = new T.Mesh(geo, mat); grp.add(m); return m;
-  };
-  car3d.paint = new T.MeshStandardMaterial({ color: state.car.color, metalness: 0.35, roughness: 0.42 });
-  const glass = new T.MeshStandardMaterial({ color: 0x1b2836, metalness: 0.7, roughness: 0.12 });
-  const dark = new T.MeshStandardMaterial({ color: 0x15181c, roughness: 0.85 });
-  const hub = new T.MeshStandardMaterial({ color: 0xc9ced4, metalness: 0.6, roughness: 0.35 });
-  extr(bodyPts(t), t.w, 0.07, car3d.paint);
-  extr(cabinPts(t), t.w * 0.86, 0.03, glass);
-  extr([[t.rr - 0.04, t.roof - 0.03], [t.rr - 0.02, t.roof + 0.05], [t.rf + 0.02, t.roof + 0.05], [t.rf + 0.04, t.roof - 0.03]], t.w * 0.88, 0.02, car3d.paint);
-  // pilares: una franja de carrocería en el centro de la cabina
-  const mid = (t.rr + t.rf) / 2;
-  extr([[mid - 0.05, t.belt], [mid - 0.05, t.roof], [mid + 0.05, t.roof], [mid + 0.05, t.belt]], t.w * 0.875, 0.01, car3d.paint);
-  const wx = t.len / 2 - 0.82;
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const w = new T.Mesh(new T.CylinderGeometry(t.r, t.r, 0.26, 28), dark);
-    w.rotation.x = Math.PI / 2; w.position.set(sx * wx, t.r, sz * (t.w / 2 - 0.1)); grp.add(w);
-    const h = new T.Mesh(new T.CylinderGeometry(t.r * 0.55, t.r * 0.55, 0.275, 20), hub);
-    h.rotation.x = Math.PI / 2; h.position.copy(w.position); grp.add(h);
+  const shell = new T.MeshStandardMaterial({ vertexColors: true, metalness: 0.25, roughness: 0.34 });
+  const TRIM = '#23272c', GLASS = '#16222e';
+  // Carrocería: faldón inferior oscuro (más alto en el SUV)
+  grp.add(new T.Mesh(loft(T, p.xs, (i) => ({ yb: p.bot[i], yt: p.H[i], hwb: p.hw[i] * 0.95, hwt: p.hw[i] * 0.97 }),
+    (i, u, v) => (v < (t.clad ? -0.45 : -0.86) ? TRIM : paint), 0.3, 0.1), shell));
+  // Cabina: cristal, con techo y pilares del color de la carrocería
+  const ci = p.xs.map((x, i) => i).filter((i) => p.R[i] > p.H[i] + 0.004);
+  const mid = (t.rr + t.rf) / 2 - 0.1;
+  grp.add(new T.Mesh(loft(T, ci.map((i) => p.xs[i]), (k) => { const i = ci[k]; return { yb: p.H[i] - 0.04, yt: Math.max(p.R[i], p.H[i] + 0.02), hwb: p.hw[i] * 0.93, hwt: p.hw[i] * 0.74 }; },
+    (k, u, v) => {
+      const x = p.xs[ci[k]], side = Math.abs(u) > 0.9;
+      if (v > 0.8 && x > t.rr - 0.08 && x < t.rf + 0.08) return paint;                 // techo
+      if (side && (x > t.rf - 0.04 || x < t.rr + 0.06 || Math.abs(x - mid) < 0.06)) return paint; // pilares A, B y C
+      if (v < -0.72) return paint;
+      return GLASS;
+    }, 0.4, 0.22), shell));
+  const dark = new T.MeshStandardMaterial({ color: 0x14171a, roughness: 0.9 });
+  const rim = new T.MeshStandardMaterial({ color: 0xc8cdd3, metalness: 0.7, roughness: 0.3 });
+  const trim = new T.MeshStandardMaterial({ color: 0x23272c, roughness: 0.7 });
+  const at = (x) => { let b = 0; for (let i = 1; i < p.xs.length; i++) if (Math.abs(p.xs[i] - x) < Math.abs(p.xs[b] - x)) b = i; return b; };
+  for (const wx of [p.h - 0.82, -p.h + 0.8]) for (const sz of [-1, 1]) {
+    const z = sz * (p.hw[at(wx)] * 0.95 - 0.03);
+    const tyre = new T.Mesh(new T.CylinderGeometry(t.r, t.r, 0.2, 32), dark); tyre.rotation.x = Math.PI / 2; tyre.position.set(wx, t.r, z); grp.add(tyre);
+    const wall = new T.Mesh(new T.TorusGeometry(t.r - 0.045, 0.05, 10, 32), dark); wall.position.set(wx, t.r, z + sz * 0.09); grp.add(wall);
+    const disc = new T.Mesh(new T.CylinderGeometry(t.r * 0.66, t.r * 0.66, 0.05, 28), rim); disc.rotation.x = Math.PI / 2; disc.position.set(wx, t.r, z + sz * 0.1); grp.add(disc);
+    for (let s = 0; s < 5; s++) { const sp = new T.Mesh(new T.BoxGeometry(t.r * 0.5, 0.045, 0.02), dark); sp.position.set(wx, t.r, z + sz * 0.13); sp.rotation.z = (s * 2 * Math.PI) / 5 + 0.3; sp.translateX(t.r * 0.34); grp.add(sp); }
+    const cap = new T.Mesh(new T.CylinderGeometry(t.r * 0.16, t.r * 0.16, 0.07, 16), rim); cap.rotation.x = Math.PI / 2; cap.position.set(wx, t.r, z + sz * 0.11); grp.add(cap);
+    const arch = new T.Mesh(new T.TorusGeometry(t.r + 0.055, 0.04, 8, 28, Math.PI), trim); arch.position.set(wx, t.r, z + sz * 0.075); grp.add(arch);
   }
-  const lamp = (x, y, color) => { for (const sz of [-1, 1]) { const m = new T.Mesh(new T.BoxGeometry(0.07, 0.13, 0.36), new T.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.7 })); m.position.set(x, y, sz * t.w * 0.3); grp.add(m); } };
-  lamp(t.len / 2 - 0.03, t.nose - 0.16, 0xfff2c4);
-  lamp(-t.len / 2 + 0.01, t.belt - 0.16, 0xd5202a);
-  grp.scale.setScalar(4.6 / Math.max(4.6, t.len));
+  const lamp = (x, y, color, zf, sx) => { for (const sz of [-1, 1]) { const m = new T.Mesh(new T.SphereGeometry(1, 16, 12), new T.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.65, roughness: 0.2 })); m.scale.set(sx, 0.06, 0.17); m.position.set(x, y, sz * p.hw[at(x)] * zf); grp.add(m); } };
+  lamp(p.h - 0.12, t.nose - 0.12, 0xfff3cf, 0.74, 0.08);
+  lamp(-p.h + 0.07, (t.deck ? t.belt - 0.12 : t.belt - 0.08), 0xd5202a, 0.74, 0.07);
+  const box = (sx, sy, sz, x, y, z, mat) => { const m = new T.Mesh(new T.BoxGeometry(sx, sy, sz), mat); m.position.set(x, y, z); grp.add(m); return m; };
+  box(0.06, 0.16, t.w * 0.42, p.h - 0.035, t.nose - 0.36, 0, trim);                                    // calandra
+  box(0.03, 0.11, 0.5, -p.h + 0.02, t.gc + 0.32, 0, new T.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.6 })); // matrícula
+  const body = new T.MeshStandardMaterial({ color: paint, metalness: 0.25, roughness: 0.34 });
+  for (const sz of [-1, 1]) box(0.14, 0.09, 0.16, t.wind - 0.12, p.H[at(t.wind)] + 0.07, sz * (p.hw[at(t.wind)] * 0.93 + 0.07), body); // retrovisores
+  car3d.shadow.scale.set(t.len * 1.45, t.w * 2.1, 1);
   car3d.group = grp; car3d.scene.add(grp);
 }
 function loop3D() {
@@ -571,6 +638,7 @@ function paintCar() {
   document.querySelectorAll('.veh').forEach((el) => { el.innerHTML = carSVG(); });
   document.querySelectorAll('.pump:empty').forEach((el) => { el.innerHTML = PUMP_SVG; });
   $('car-types').innerHTML = CAR_TYPES.map((t) => `<button type="button" class="chip" role="radio" aria-checked="${t.k === state.car.type}" data-type="${t.k}">${t.n}</button>`).join('');
+  $('car-eg').textContent = `${carType().eg} · ${fmt(carType().len, 1)} m de largo`;
   $('car-colors').innerHTML = CAR_COLORS.map((c) => `<button type="button" role="radio" aria-checked="${c === state.car.color}" aria-label="Color ${c}" data-color="${c}" style="background:${c}"></button>`).join('');
 }
 
@@ -897,7 +965,7 @@ function renderList(P) {
     const cls = pl.net > 0.005 ? 'pos' : pl.net < -0.005 ? 'negv' : '';
     return `<li>
       <div class="kmtag">km<b>${fmt(c.km, 0)}</b></div>
-      <div class="st">${tags}<b>${esc(stName(c))}</b><small>${esc(stPlace(c))}</small><small>${fmt(c.price, 3)} €/L · ${approx(c)}${mins(c.detourMin)} · ${fmt(pl.litres, 0)}&nbsp;L${c.open === null && c.s[8] ? ' · horario sin confirmar' : ''}</small>
+      <div class="st">${tags}<b>${esc(stName(c))}</b><small>${esc(stPlace(c))}</small><small>${fmt(c.price, 3)} €/L · ${approx(c)}${mins(c.detourMin)} ${c.open === null && c.s[8] ? ' · horario sin confirmar' : ''}</small><small>Llegas con ${fmt(pl.legs[0].arrive, 0)} L · echas ${fmt(pl.litres, 0)}&nbsp;L · pagas ${eur(pl.pay)}</small>
         ${more ? `<small class="more">y ${more} más en la zona</small>` : ''}</div>
       <div class="amt"><b class="${cls}">${pl.net >= 0 ? '+' : '−'}${fmt(Math.abs(pl.net), 2)} €</b><small>ahorro</small></div>
       <div class="acts"><a href="${gmaps([c])}" target="_blank" rel="noopener">Ir con esta parada</a><a href="#map" data-show="${esc(c.id)}">Ver en el mapa</a></div>
@@ -907,18 +975,42 @@ function renderList(P) {
   return `<section class="card"><div class="sorter">${btn('score', 'Mejor')}${btn('price', 'Más barata')}${btn('detour', 'Menos desvío')}</div><ul class="list">${li}</ul></section>`;
 }
 
-function renderStopBlock(leg, n, total) {
+function renderStopBlock(leg, n, total, car) {
   const c = leg.s;
-  const what = leg.full ? `Llena el depósito: <b>${fmt(leg.L, 0)} L</b>` : `Echa solo <b>${fmt(leg.L, 0)} L</b>, lo justo para llegar a la siguiente`;
   return `<div class="best-head">
       <div class="hito" aria-label="Kilómetro ${fmt(c.km, 0)} de tu ruta"><i>KM</i><b>${fmt(c.km, 0)}</b></div>
       <div class="best-id"><span class="eyebrow">${total > 1 ? `Parada ${n} de ${total} · ` : ''}Hacia las ${hhmm(c.eta)}</span><h2>${esc(stName(c))}</h2></div>
       <div class="price"><b>${fmt(c.price, 3)}</b><span>€/L${c.disc ? ' con descuento' : ''}</span></div>
       <div class="best-more">
-        <p class="what">${what} · desvío de ${approx(c)}${fmt(c.detourKm, 1)} km, ${mins(c.detourMin)}</p>
         <p>${esc(stPlace(c))}${c.s[8] ? ' · ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (horario sin confirmar)' : ''}</p>
+        <p>Desvío de ${approx(c)}${fmt(c.detourKm, 1)} km, ${mins(c.detourMin)}</p>
       </div>
+    </div>
+    <div class="stats">
+      <div><small>Llegas con</small><b>${fmt(leg.arrive, 0)} L</b><small>${fmt(leg.arrive / car.tank * 100, 0)} % del depósito</small></div>
+      <div><small>${leg.full ? 'Llenas' : 'Echas solo'}</small><b>${fmt(leg.L, 0)} L</b><small>${leg.full ? 'hasta arriba' : 'lo justo para seguir'}</small></div>
+      <div><small>Pagas unos</small><b>${eur(leg.pay)}</b><small>a ${fmt(c.price, 3)} €/L</small></div>
     </div>`;
+}
+
+/* Lo mismo en otros sitios: cuánto costarían esos mismos litros en las alternativas y a precio normal. */
+function renderCompare(P) {
+  const ch = P.chosen, L = ch.litres, rows = [{ n: `Tu parada${ch.stops.length > 1 ? 's' : ''}`, sub: ch.stops.map((c) => 'km ' + fmt(c.km, 0)).join(' y '), cost: ch.pay, me: true }];
+  if (ch.stops.length === 1) {
+    const zones = new Set([Math.round(ch.stops[0].km / 15)]);
+    for (const pl of P.singles) {
+      const c = pl.stops[0], z = Math.round(c.km / 15);
+      if (pl === ch || zones.has(z)) continue;
+      zones.add(z); rows.push({ n: stName(c), sub: `km ${fmt(c.km, 0)} · ${stTown(c)}`, cost: L * c.price });
+      if (rows.length >= 3) break;
+    }
+  }
+  rows.push({ n: 'Gasolinera normal de carretera', sub: `${fmt(P.ref, 3)} €/L`, cost: L * P.ref });
+  const dear = P.cands.reduce((a, c) => (c.price > a.price ? c : a), P.cands[0]);
+  rows.push({ n: 'La más cara de la ruta', sub: `${fmt(dear.price, 3)} €/L · ${stTown(dear)}`, cost: L * dear.price });
+  const max = Math.max(...rows.map((r) => r.cost));
+  return `<section class="card cmp"><h3>Lo mismo en otros sitios</h3><p class="hint">Lo que costarían estos ${fmt(L, 0)} L en cada sitio.</p>
+    ${rows.map((r) => `<div class="cmprow ${r.me ? 'me' : ''}"><div class="cmpn"><b>${esc(r.n)}</b><small>${esc(r.sub)}</small></div><div class="cmpv"><b>${eur(r.cost)}</b>${r.me ? '' : `<small class="${r.cost - ch.pay >= 0 ? '' : 'less'}">${r.cost - ch.pay >= 0 ? '+' : '−'}${eur(Math.abs(r.cost - ch.pay))}</small>`}</div><i style="width:${(r.cost / max * 100).toFixed(1)}%"></i></div>`).join('')}</section>`;
 }
 
 function renderResult() {
@@ -959,19 +1051,20 @@ function renderResult() {
   $('t-plan').innerHTML = `${warns.length ? `<div class="note">${warns.map((w) => `<p>${w}</p>`).join('')}</div>` : ''}
     <article class="card best">
       <div class="verdict ${gain ? '' : 'zero'}"><span>${where}</span><b>${gain ? '' : '−'}<span class="count" data-to="${Math.abs(ch.net).toFixed(2)}">${eur(Math.abs(ch.net))}</span><small>${gain ? 'de ahorro' : 'de sobrecoste'}</small></b></div>
-      ${ch.legs.map((l, i) => renderStopBlock(l, i + 1, n)).join('<hr class="sep">')}
-      <p class="why">${why}</p>
+      ${ch.legs.map((l, i) => renderStopBlock(l, i + 1, n, car)).join('<hr class="sep">')}
+      <p class="why">${why} Llegarás a ${esc(state.dest.name)} con unos ${fmt(ch.endFuel, 0)} L.</p>
       <a class="go" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir con ${n > 1 ? 'estas paradas' : 'esta parada'} en Google Maps</a>
-      <details class="breakdown"><summary>Ver las cuentas</summary>
+      <details class="breakdown" open><summary>Cómo sale la cuenta</summary>
         <dl class="rows">
-          <div><dt>Precio normal en gasolineras de ${P.refKind === 'carretera' ? 'carretera' : 'la ruta'}</dt><dd>${fmt(P.ref, 3)} €/L</dd></div>
-          <div><dt>Litros que echarás</dt><dd>${fmt(ch.litres, 0)} L</dd></div>
-          <div><dt>Ahorro por precio</dt><dd>${ch.gross >= 0 ? '' : '−'}${eur(Math.abs(ch.gross))}</dd></div>
-          <div><dt>Gasolina del desvío (${mins(ch.detMin)})</dt><dd class="${ch.detCost >= 0.005 ? 'neg' : ''}">−${eur(ch.detCost)}</dd></div>
+          <div><dt>${fmt(ch.litres, 0)} L en tu parada</dt><dd>${eur(ch.pay)}</dd></div>
+          <div><dt>Los mismos litros a precio normal de ${P.refKind === 'carretera' ? 'carretera' : 'la ruta'} (${fmt(P.ref, 3)} €/L)</dt><dd>${eur(ch.litres * P.ref)}</dd></div>
+          <div><dt>Diferencia</dt><dd>${ch.gross >= 0 ? '' : '−'}${eur(Math.abs(ch.gross))}</dd></div>
+          <div><dt>Gasolina que gastas en el desvío (${mins(ch.detMin)})</dt><dd class="${ch.detCost >= 0.005 ? 'neg' : ''}">−${eur(ch.detCost)}</dd></div>
           <div class="total"><dt>${gain ? 'Ahorro' : 'Sobrecoste'}</dt><dd>${eur(Math.abs(ch.net))}</dd></div>
         </dl>
       </details>
     </article>
+    ${renderCompare(P)}
     ${trip}<div class="infos">${infos.map((t) => `<p>${t}</p>`).join('')}<button type="button" class="linkbtn" id="btn-here">Ya estoy en ruta: recalcular desde donde estoy</button></div>`;
   $('t-precios').innerHTML = renderChart(P);
   $('t-otras').innerHTML = renderList(P);
@@ -1162,7 +1255,7 @@ function init() {
   const auto = () => setTimeout(() => { if (state.panel === 2 && state.q < QS.length - 1) showQ(state.q + 1, 1); }, 260);
   $('fuels').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) { state.fuel = b.dataset.k; updateGauge(); save(); auto(); } });
   $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; paintCar(); build3D(); updateGauge(); save(); } });
-  $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); if (car3d.paint) car3d.paint.color.set(state.car.color); save(); } });
+  $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); build3D(); save(); } });
   $('umbral').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { state.frac = +b.dataset.f; updateGauge(); save(); auto(); } });
   $('desvio').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) { state.detour = b.dataset.d; updateGauge(); save(); auto(); } });
   $('deck').addEventListener('click', (e) => {

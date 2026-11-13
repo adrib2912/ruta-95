@@ -149,7 +149,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .best { padding: 0; overflow: hidden; }
 .verdict { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 16px; background: var(--good-soft); color: var(--good); }
 .verdict.zero { background: var(--blue-soft); color: var(--ink); }
-.verdict span { font: 700 17px/1.15 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
+.verdict > span { font: 700 17px/1.15 var(--f-display); letter-spacing: .06em; text-transform: uppercase; }
 .verdict b { font: 700 40px/.95 var(--f-display); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .verdict b small { display: block; font: 600 13px/1.2 var(--f-body); letter-spacing: 0; text-transform: none; }
 .best-head { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; gap: 8px 14px; padding: 16px 16px 12px; align-items: start; }
@@ -352,3 +352,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @keyframes inF { from { opacity: 0; transform: translateX(28px); } }
 @keyframes inB { from { opacity: 0; transform: translateX(-28px); } }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+.eg { text-align: center; font-weight: 600; margin: -4px 0 0; }
+.viewer { height: 250px; }
+
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px 14px; }
+.stats div { background: var(--bg); border-radius: 12px; padding: 10px 8px; text-align: center; min-width: 0; }
+.stats b { display: block; font: 700 22px/1.1 var(--f-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stats small { display: block; font-size: 11px; color: var(--muted); line-height: 1.25; }
+.cmp { display: flex; flex-direction: column; gap: 10px; }
+.cmp h3 { margin: 0; } .cmp .hint { margin: -6px 0 0; }
+.cmprow { position: relative; display: flex; justify-content: space-between; gap: 12px; padding-bottom: 9px; }
+.cmprow > i { position: absolute; left: 0; bottom: 0; height: 5px; border-radius: 3px; background: var(--line); }
+.cmprow.me > i { background: var(--good); }
+.cmpn { min-width: 0; } .cmpn b { display: block; font-weight: 600; overflow-wrap: anywhere; } .cmpn small, .cmpv small { display: block; font-size: 13px; color: var(--muted); }
+.cmpv { text-align: right; flex: none; font-variant-numeric: tabular-nums; } .cmpv b { font: 700 20px/1.1 var(--f-display); } .cmpv small { color: var(--warn); font-weight: 600; }
+.cmprow.me .cmpv b { color: var(--good); }
+@media (prefers-reduced-motion: no-preference) { .cmprow > i { animation: grow .6s .2s cubic-bezier(.2, .7, .2, 1) both; transform-origin: left; } .stats div { animation: rise .35s .35s cubic-bezier(.2, .7, .2, 1) both; } }
+@keyframes grow { from { transform: scaleX(0); } }
+.cmpv small.less { color: var(--muted); }
