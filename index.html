@@ -11,9 +11,10 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="app.css?v=5">
+<script>try{var k=JSON.parse(localStorage.getItem("ruta95")||"{}").skin;if(k)document.documentElement.dataset.skin=k}catch(e){}</script>
+<link rel="stylesheet" href="app.css?v=6">
 </head>
 <body>
 <main class="wrap">
@@ -25,6 +26,11 @@
       <p>Dónde repostar en tu ruta</p>
     </div>
   </header>
+
+  <div class="summary" id="summary" hidden>
+    <div><b id="sum-route"></b><span id="sum-car"></span></div>
+    <button type="button" id="btn-edit">Cambiar</button>
+  </div>
 
   <form id="form" autocomplete="off">
     <section class="sign" aria-label="Ruta">
@@ -49,10 +55,13 @@
         </div>
         <ul class="sugg" id="sugg-destino" hidden></ul>
       </div>
-      <button type="button" id="btn-add" class="addstop">+ Añadir parada intermedia</button>
-      <div class="field when">
-        <label for="salida">Salgo (vacío = ahora)</label>
-        <div class="inrow"><input id="salida" type="datetime-local"></div>
+      <div class="signlinks">
+        <button type="button" id="btn-add" class="addstop">+ Añadir parada</button>
+        <button type="button" id="btn-when" class="addstop">Salgo ahora · cambiar</button>
+      </div>
+      <div class="field" id="when-box" hidden>
+        <label for="salida">Día y hora de salida</label>
+        <div class="inrow"><input id="salida" type="datetime-local"><button type="button" id="btn-now" class="iconbtn">Ahora</button></div>
       </div>
     </section>
 
@@ -81,37 +90,29 @@
 
       <details class="adv">
         <summary>Ajustes finos</summary>
-        <div class="grid3">
-          <div class="numfield">
-            <label for="reserva">No bajar de</label>
-            <div class="unit"><input id="reserva" type="number" inputmode="numeric" step="1" min="0" max="30" value="6"><span>L</span></div>
-          </div>
-          <div class="numfield">
-            <label for="pasillo">Buscar hasta</label>
-            <div class="unit"><input id="pasillo" type="number" inputmode="numeric" step="1" min="1" max="10" value="4"><span>km de la ruta</span></div>
-          </div>
-          <div class="numfield">
-            <label for="tiempo">Mi tiempo vale</label>
-            <div class="unit"><input id="tiempo" type="number" inputmode="numeric" step="1" min="0" max="60" value="6"><span>€/h</span></div>
-          </div>
-          <div class="numfield">
-            <label for="margen">En carretera gasto</label>
-            <div class="unit"><input id="margen" type="number" inputmode="numeric" step="5" min="0" max="50" value="10"><span>% más</span></div>
-          </div>
+        <div class="rows-set">
+          <div class="numfield"><label for="reserva">No bajar de</label><div class="unit"><input id="reserva" type="number" inputmode="numeric" step="1" min="0" max="30" value="6"><span>L</span></div></div>
+          <div class="numfield"><label for="pasillo">Buscar hasta</label><div class="unit"><input id="pasillo" type="number" inputmode="numeric" step="1" min="1" max="10" value="4"><span>km de la ruta</span></div></div>
+          <div class="numfield"><label for="tiempo">Mi tiempo vale</label><div class="unit"><input id="tiempo" type="number" inputmode="numeric" step="1" min="0" max="60" value="6"><span>€/h</span></div></div>
+          <div class="numfield"><label for="margen">En carretera gasto</label><div class="unit"><input id="margen" type="number" inputmode="numeric" step="5" min="0" max="50" value="10"><span>% más</span></div></div>
         </div>
-        <p class="hint">El valor del tiempo solo ordena las paradas: resta al ahorro los minutos de desvío y de parada. El margen de carretera hace más prudente la autonomía; no cambia los euros.</p>
+        <p class="hint">El valor del tiempo solo ordena las paradas. El margen de carretera hace más prudente la autonomía; no cambia los euros.</p>
       </details>
 
       <details class="adv">
         <summary>Mis descuentos</summary>
-        <div class="grid3" id="discounts"></div>
-        <p class="hint">Céntimos por litro que te descuenta cada marca con su tarjeta o app. Se restan al precio de sus gasolineras.</p>
+        <div class="rows-set" id="discounts"></div>
+        <p class="hint">Céntimos por litro que te descuenta cada marca con su tarjeta o app.</p>
       </details>
     </section>
 
     <button type="submit" class="cta" id="btn-go">Buscar mi parada</button>
-    <p class="status" id="status" role="status" aria-live="polite"></p>
   </form>
+
+  <div id="progress">
+    <ol class="steps" id="steps" hidden></ol>
+    <p class="status" id="status" role="status" aria-live="polite"></p>
+  </div>
 
   <section id="results" hidden></section>
 
@@ -121,18 +122,23 @@
       <li><b>Traza tu ruta</b> y calcula hasta qué kilómetro llegas con lo que llevas en el depósito.</li>
       <li><b>Mira las gasolineras de ese tramo</b> que estarán abiertas cuando pases, las de pie de carretera y las que quedan a pocos kilómetros de una salida.</li>
       <li><b>Mide el desvío real</b> de cada una, en kilómetros y minutos, y lo resta al ahorro.</li>
-      <li><b>Compara con el precio habitual a pie de carretera</b>, que es donde acabarías parando sin planificar. No con la más cara de la zona.</li>
+      <li><b>Compara con el precio normal de las gasolineras de carretera</b>, que es donde acabarías parando sin planificar. No con la más cara de la zona.</li>
       <li><b>Si con un repostaje no llegas, lo reparte en dos</b>: lo justo en la cara y depósito lleno en la barata.</li>
     </ol>
   </section>
 
   <footer class="foot">
+    <div class="skins" id="skins" role="group" aria-label="Aspecto">Aspecto
+      <button type="button" data-skin-btn="">Señal</button>
+      <button type="button" data-skin-btn="asfalto">Asfalto</button>
+      <button type="button" data-skin-btn="ticket">Ticket</button>
+    </div>
     <p id="data-date"></p>
     <p>Precios: Geoportal de Gasolineras, Ministerio para la Transición Ecológica. Rutas: OSRM y OpenStreetMap. Los precios pueden cambiar durante el día y no incluyen descuentos de tarjetas.</p>
   </footer>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>
