@@ -54,7 +54,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body { background: var(--bg); color: var(--ink); font: 400 16px/1.45 var(--f-body); -webkit-text-size-adjust: 100%; }
+body { background: var(--bg); color: var(--ink); font: 400 16px/1.45 var(--f-body); -webkit-text-size-adjust: 100%; touch-action: manipulation; overscroll-behavior-y: none; }
 .wrap { max-width: 600px; margin: 0 auto; padding: 16px 16px 120px; display: flex; flex-direction: column; gap: 14px; }
 form { display: flex; flex-direction: column; gap: 14px; }
 [hidden] { display: none !important; }
@@ -370,3 +370,46 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (prefers-reduced-motion: no-preference) { .cmprow > i { animation: grow .6s .2s cubic-bezier(.2, .7, .2, 1) both; transform-origin: left; } .stats div { animation: rise .35s .35s cubic-bezier(.2, .7, .2, 1) both; } }
 @keyframes grow { from { transform: scaleX(0); } }
 .cmpv small.less { color: var(--muted); }
+
+/* Navegación de las tarjetas */
+.qnav { display: grid; grid-template-columns: 48px 1fr 48px; align-items: center; gap: 8px; }
+.qmid { text-align: center; }
+.qmid p { font: 700 14px var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.qarrow { width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); display: grid; place-items: center; color: var(--ink); }
+.qarrow:disabled { opacity: .3; cursor: default; }
+.qarrow:not(:disabled):active { transform: scale(.94); }
+/* Colores */
+.swlabel { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: -6px; }
+.swatches { gap: 8px; }
+.swatches button, .sw-custom { width: 36px; height: 36px; }
+.swatches button span { font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.6); }
+.sw-custom { position: relative; border-radius: 50%; border: 2px dashed var(--muted); background: conic-gradient(#e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935); overflow: hidden; cursor: pointer; }
+.sw-custom.on { border-style: solid; box-shadow: 0 0 0 3px var(--surface), 0 0 0 5.5px var(--ink); }
+.sw-custom input { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); opacity: 0; cursor: pointer; }
+/* Aguja arrastrable */
+#dial { touch-action: none; cursor: grab; }
+/* Depósito en la parada */
+.fill { padding: 0 16px 14px; }
+.fill-bar { position: relative; height: 22px; border-radius: 11px; background: var(--bg); border: 1.5px solid var(--line); overflow: hidden; }
+.fill-bar i { position: absolute; top: 0; bottom: 0; }
+.fill-bar .have { left: 0; background: var(--blue); }
+.fill-bar .add { background: repeating-linear-gradient(135deg, var(--good) 0 6px, color-mix(in srgb, var(--good) 75%, #fff) 6px 12px); }
+.fill-bar .lim { width: 2px; background: var(--red); }
+.fill-l { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-top: 8px; font-size: 14px; color: var(--muted); }
+.fill-l b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.k { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: baseline; }
+.k.have { background: var(--blue); } .k.add { background: var(--good); }
+.food { padding: 0 16px 12px; font-size: 14px; color: var(--muted); }
+.food b { color: var(--ink); } .food a { color: var(--blue); font-weight: 600; }
+.tag.food { background: var(--good-soft); color: var(--good); }
+/* Depósito durante el viaje */
+.tank svg { display: block; width: 100%; height: auto; overflow: visible; }
+.tank .tl { font: 700 12px var(--f-body); fill: var(--ink); }
+.tank .ta { font: 500 10px var(--f-body); fill: var(--muted); }
+.tank .ta.red { fill: var(--red); }
+@media (prefers-reduced-motion: no-preference) {
+  .fill-bar .have { animation: grow .6s .3s cubic-bezier(.2, .7, .2, 1) both; transform-origin: left; }
+  .fill-bar .add { animation: grow .5s .9s cubic-bezier(.2, .7, .2, 1) both; transform-origin: left; }
+  .tank .tline { stroke-dasharray: 1400; animation: draw 1.4s .2s ease-out both; }
+}
+@keyframes draw { from { stroke-dashoffset: 1400; } }

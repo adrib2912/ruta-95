@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Ruta 95</title>
 <meta name="description" content="Dónde repostar en tu ruta: la parada que más te ahorra contando el desvío.">
 <meta name="theme-color" content="#0B4EA2">
@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script>try{var k=JSON.parse(localStorage.getItem("ruta95")||"{}").skin;if(k)document.documentElement.dataset.skin=k}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=12">
+<link rel="stylesheet" href="app.css?v=13">
 </head>
 <body>
 <main class="wrap">
@@ -88,7 +88,11 @@
 
   <!-- Panel 3: Coche, una pregunta por tarjeta -->
   <section class="panel" id="p2" aria-label="Coche" hidden>
-    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div class="qnav">
+      <button type="button" class="qarrow" id="q-prev" aria-label="Pregunta anterior"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="qmid"><p id="q-step"></p><div class="dots" id="dots" aria-hidden="true"></div></div>
+      <button type="button" class="qarrow" id="q-next" aria-label="Siguiente pregunta"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
     <div id="deck">
       <section class="qcard card" data-q="coche">
         <h2 class="ptitle">¿Cómo es tu coche?</h2>
@@ -96,7 +100,10 @@
         <p class="eg" id="car-eg"></p>
         <p class="hint center" id="car-hint">Arrástralo para girarlo</p>
         <div class="chips" id="car-types" role="radiogroup" aria-label="Carrocería"></div>
-        <div class="swatches" id="car-colors" role="radiogroup" aria-label="Color"></div>
+        <p class="swlabel">Carrocería</p>
+        <div class="swatches" id="car-colors" role="radiogroup" aria-label="Color de la carrocería"></div>
+        <p class="swlabel">Techo</p>
+        <div class="swatches" id="roof-colors" role="radiogroup" aria-label="Color del techo"></div>
       </section>
 
       <section class="qcard card" data-q="fuel" hidden>
@@ -125,10 +132,18 @@
         <div class="tiles" id="desvio" role="radiogroup" aria-label="Desvío"></div>
       </section>
 
+      <section class="qcard card" data-q="comida" hidden>
+        <h2 class="ptitle">¿Paras a comer por el camino?</h2>
+        <p class="sub" id="comida-sub"></p>
+        <div class="tiles" id="comida" role="radiogroup" aria-label="Parar a comer"></div>
+        <p class="hint">Los restaurantes salen de OpenStreetMap: puede faltar alguno.</p>
+      </section>
+
       <section class="qcard card" data-q="nivel" hidden>
         <h2 class="ptitle">¿Cuánto llevas ahora?</h2>
         <div class="dialbox"><div id="dial"></div><output id="nivel-out" for="nivel"></output></div>
         <input id="nivel" type="range" min="5" max="100" step="5" value="50" aria-label="Depósito al salir">
+        <p class="hint center">Arrastra la aguja o la barra</p>
         <p class="hint" id="umbral-out"></p>
         <p class="carsum" id="car-sum"></p>
         <button type="button" class="linkbtn" id="btn-editcar" hidden>Cambiar coche y preferencias</button>
@@ -187,6 +202,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

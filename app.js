@@ -32,6 +32,8 @@ const ON_ROUTE_KM = 0.4;    // "a pie de ruta"
 const STOP_MIN = 6;         // minutos que cuesta una parada (repostar y pagar)
 const MIN_LITRES = 5;       // no se propone echar menos
 const MAX_STOPS = 5;
+const MEAL_BONUS = 6;       // euros de preferencia para una parada con sitio para comer a la hora de comer
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -43,7 +45,7 @@ const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u
 
 const state = { fuel: 'g95', origin: null, dest: null, stops: [], stopPlaces: [], discounts: {}, stations: null, places: null, recents: [],
   routes: null, alt: 0, plan: null, sort: 'score', map: null, rmap: null, mapDirty: true, markers: new Map(),
-  car: { type: 'com', color: '#1F5FBF' }, frac: 0.25, detour: 'short', carDone: false, editing: false, q: 0, panel: 0, maxPanel: 0, stationsP: null };
+  car: { type: 'com', color: '#1F5FBF', roof: '' }, eat: 'no', frac: 0.25, detour: 'short', carDone: false, editing: false, q: 0, panel: 0, maxPanel: 0, stationsP: null };
 
 /* ---------- Geometría ---------- */
 function hav(aLat, aLon, bLat, bLon) {
@@ -212,7 +214,8 @@ function evalPlan(stops, modes, P, strict = true) {
   if (strict && !complete) return null;
   const net = gross - detCost;
   return { legs, stops, gross, detCost, detMin, litres, net, complete, endFuel: Math.max(0, fuel - last * c), pay: legs.reduce((a, l) => a + l.pay, 0),
-    score: net - (detMin + STOP_MIN * stops.length) * car.timeValue / 60 };
+    meal: !!(car.eat && stops.some((s) => s.mealOk)),
+    score: net - (detMin + STOP_MIN * stops.length) * car.timeValue / 60 + (car.eat && stops.some((s) => s.mealOk) ? MEAL_BONUS : 0) };
 }
 
 function preparePlan(route, near, car) {
@@ -251,8 +254,51 @@ function preparePlan(route, near, car) {
     .filter((c) => !inFirst.has(c) && c.km > reachKm && c.km <= rangeKm + fullRangeKm)
     .sort((a, b) => ((ref - b.price) * car.tank * 0.7 - b.detourMin * car.timeValue / 60) - ((ref - a.price) * car.tank * 0.7 - a.detourMin * car.timeValue / 60))
     .slice(0, SHORTLIST);
+  // Si quiere comer, se añaden las gasolineras alcanzables que caen en la hora de comer
+  if (car.eat && car.meal && !P.outOfReach) {
+    const inWin = (c) => c.eta.getTime() >= car.meal.a - 15 * 60000 && c.eta.getTime() <= car.meal.b + 15 * 60000;
+    const have = new Set(P.first);
+    P.first.push(...first.filter((c) => inWin(c) && !have.has(c)).slice(0, 12));
+    P.mealCands = P.first.filter(inWin);
+  }
   P.short = [...P.first, ...P.later];
   return P;
+}
+
+/* Hora de comer o cenar durante el viaje: el tramo de ruta en que cae, si dura al menos 25 minutos. */
+function mealWindow(route, depart) {
+  if (!route || route.durMin < 60) return null;
+  const t0 = depart.getTime(), t1 = t0 + route.durMin * 60000;
+  let best = null;
+  for (let d = 0; d <= 2; d++) {
+    const base = new Date(depart); base.setHours(0, 0, 0, 0); base.setDate(base.getDate() + d);
+    for (const [n, a, b] of [['comer', 13 * 60, 15 * 60 + 30], ['cenar', 20 * 60 + 30, 22 * 60 + 30]]) {
+      const wa = Math.max(base.getTime() + a * 60000, t0 + 30 * 60000), wb = Math.min(base.getTime() + b * 60000, t1 - 15 * 60000);
+      if (wb - wa >= 25 * 60000 && (!best || wa < best.a)) best = { n, a: wa, b: wb };
+    }
+  }
+  if (!best) return null;
+  const km = (t) => (t - t0) / (route.durMin * 60000) * route.distKm;
+  return { ...best, kmA: km(best.a), kmB: km(best.b) };
+}
+
+/* Restaurantes a menos de 450 m de cada gasolinera, de OpenStreetMap. */
+async function findFood(cands, meal) {
+  if (!cands || !cands.length) return;
+  const q = `[out:json][timeout:20];(${cands.map((c) => `nwr(around:450,${c.lat.toFixed(5)},${c.lon.toFixed(5)})[amenity~"^(restaurant|fast_food)$"];`).join('')});out center tags;`;
+  let j = null;
+  for (const base of OVERPASS) {
+    try { j = await getJSON(base + '?data=' + encodeURIComponent(q), {}, 20000); if (j && j.elements) break; } catch (_) { j = null; }
+  }
+  if (!j || !j.elements) throw new Error('Sin datos de restaurantes');
+  const places = j.elements.map((e) => ({ name: e.tags && e.tags.name, type: e.tags && e.tags.amenity, lat: e.lat != null ? e.lat : e.center && e.center.lat, lon: e.lon != null ? e.lon : e.center && e.center.lon }))
+    .filter((x) => x.name && x.lat != null);
+  for (const c of cands) {
+    const seen = new Set();
+    c.food = places.map((f) => ({ ...f, d: hav(c.lat, c.lon, f.lat, f.lon) * 1000 })).filter((f) => f.d <= 450 && !seen.has(f.name) && seen.add(f.name)).sort((a, b) => a.d - b.d).slice(0, 3);
+    const t = c.eta.getTime();
+    c.mealOk = c.food.length > 0 && t >= meal.a - 15 * 60000 && t <= meal.b + 15 * 60000;
+  }
 }
 
 function solve(P) {
@@ -464,14 +510,20 @@ const CAR_TYPES = [
   { k: 'fur', n: 'Furgoneta', eg: 'La más grande y alta', len: 4.95, w: 1.93, gc: 0.24, belt: 1.1, roof: 1.92, wind: 1.98, rf: 1.4, rr: -2.24, rear: -2.4, nose: 0.98, r: 0.34, cons: 8.0, tank: 70 },
   { k: 'dep', n: 'Deportivo', eg: 'Bajo y ancho', len: 4.4, w: 1.86, gc: 0.15, belt: 0.78, roof: 1.27, wind: 0.86, rf: -0.05, rr: -0.72, rear: -1.72, nose: 0.62, r: 0.34, deck: 1, cons: 8.5, tank: 55 },
 ];
-const CAR_COLORS = ['#F2F2F2', '#22262B', '#8A9199', '#D5202A', '#1F5FBF', '#2E7D4F', '#F2B705', '#18A0A8'];
+const CAR_COLORS = ['#F4F4F2', '#C3C7CC', '#7D848C', '#3A3F45', '#16181B', '#D8C3A0', '#6E4B32', '#7A1F2B', '#D5202A', '#F07F1F', '#F2C200', '#8CC63F', '#2E7D4F', '#18A0A8', '#5AA9E6', '#1F5FBF', '#1B2E5A', '#6B3FA0', '#E86AA6'];
+const ROOF_COLORS = ['', '#16181B', '#F4F4F2', '#3A3F45', '#C3C7CC', '#D5202A', '#1F5FBF'];
+const HEX = /^#[0-9a-f]{6}$/i;
 const THRESHOLDS = [{ f: 0.12, n: 'En reserva', d: 'Apuro el depósito' }, { f: 0.25, n: 'A un cuarto', d: 'Lo habitual' }, { f: 1 / 3, n: 'A un tercio', d: 'Con margen' }, { f: 0.5, n: 'A medio depósito', d: 'No me la juego' }];
 const DETOURS = [
   { k: 'road', n: 'Solo a pie de carretera', d: 'Sin salir de mi ruta', corridor: 1.2, max: 2.5 },
   { k: 'short', n: 'Un desvío corto', d: 'Hasta unos 6 minutos', corridor: 4, max: 6 },
   { k: 'any', n: 'Lo que haga falta', d: 'Si el ahorro lo compensa', corridor: 8, max: Infinity },
 ];
-const QS = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'nivel'];
+const Q_ALL = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'comida', 'nivel'];
+const Q_NAMES = { coche: 'Tu coche', fuel: 'Combustible', nums: 'Consumo y depósito', umbral: 'Cuándo repostar', desvio: 'Desvío', comida: 'Comida', nivel: 'Depósito ahora' };
+let QS = Q_ALL.filter((q) => q !== 'comida');
+const currentMeal = () => (state.routes && state.routes[state.alt] ? mealWindow(state.routes[state.alt], readDepart()) : null);
+const buildQS = () => { QS = Q_ALL.filter((q) => q !== 'comida' || currentMeal()); };
 const PUMP_SVG = '<svg viewBox="0 0 24 30" aria-hidden="true"><rect x="3" y="3" width="13" height="24" rx="2" fill="var(--red)"/><rect x="5.5" y="6" width="8" height="7" rx="1" fill="#fff"/><rect x="1" y="26" width="17" height="3" rx="1" fill="var(--ink)"/><path d="M16 12h2.5q2 0 2 2v8q0 1.5 1.2 1.5T23 22V11l-3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const FLAG_SVG = '<svg viewBox="0 0 20 26" aria-hidden="true"><path d="M4 2v23" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/><path d="M5 3h12l-3 4 3 4H5z" fill="var(--ink)"/></svg>';
 const carType = () => CAR_TYPES.find((c) => c.k === state.car.type) || CAR_TYPES[1];
@@ -500,7 +552,7 @@ function carSVG() {
   const cabBase = p.xs.map((x, i) => (p.R[i] > p.H[i] + 0.005 ? `${X(x)} ${Y(p.H[i])}` : null)).filter(Boolean).reverse();
   const wf = p.h - 0.82, wr = -p.h + 0.8;
   const wheel = (x) => `<circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S).toFixed(1)}" fill="var(--ink)"/><circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S * 0.45).toFixed(1)}" fill="#C9CED4"/>`;
-  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="M${[...cab, ...cabBase].join('L')}Z" fill="#CFE3F5" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="M${[...top, ...bottom].join('L')}Z" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>${wheel(wr)}${wheel(wf)}</svg>`;
+  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="M${[...cab, ...cabBase].join('L')}Z" fill="#CFE3F5" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="M${[...top, ...bottom].join('L')}Z" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>${state.car.roof && cab.length ? `<polyline points="${cab.slice(2, -2).join(' ')}" fill="none" stroke="${state.car.roof}" stroke-width="3.6" stroke-linecap="round"/>` : ''}${wheel(wr)}${wheel(wf)}</svg>`;
 }
 
 /* Modelo 3D: la carrocería y la cabina son superficies lisas generadas por secciones a lo largo del coche. */
@@ -572,7 +624,7 @@ function loft(T, xs, section, color, rho, rhoU = rho) {
 }
 function build3D() {
   if (!car3d.ok) return;
-  const T = window.THREE, t = carType(), p = carProfile(t, 96), paint = state.car.color;
+  const T = window.THREE, t = carType(), p = carProfile(t, 96), paint = state.car.color, roofC = state.car.roof || state.car.color;
   if (car3d.group) car3d.scene.remove(car3d.group);
   const grp = new T.Group();
   const shell = new T.MeshStandardMaterial({ vertexColors: true, metalness: 0.25, roughness: 0.34 });
@@ -586,8 +638,8 @@ function build3D() {
   grp.add(new T.Mesh(loft(T, ci.map((i) => p.xs[i]), (k) => { const i = ci[k]; return { yb: p.H[i] - 0.04, yt: Math.max(p.R[i], p.H[i] + 0.02), hwb: p.hw[i] * 0.93, hwt: p.hw[i] * 0.74 }; },
     (k, u, v) => {
       const x = p.xs[ci[k]], side = Math.abs(u) > 0.9;
-      if (v > 0.8 && x > t.rr - 0.08 && x < t.rf + 0.08) return paint;                 // techo
-      if (side && (x > t.rf - 0.04 || x < t.rr + 0.06 || Math.abs(x - mid) < 0.06)) return paint; // pilares A, B y C
+      if (v > 0.8 && x > t.rr - 0.08 && x < t.rf + 0.08) return roofC;                 // techo
+      if (side && (x > t.rf - 0.04 || x < t.rr + 0.06 || Math.abs(x - mid) < 0.06)) return roofC; // pilares A, B y C
       if (v < -0.72) return paint;
       return GLASS;
     }, 0.4, 0.22), shell));
@@ -611,7 +663,8 @@ function build3D() {
   box(0.06, 0.16, t.w * 0.42, p.h - 0.035, t.nose - 0.36, 0, trim);                                    // calandra
   box(0.03, 0.11, 0.5, -p.h + 0.02, t.gc + 0.32, 0, new T.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.6 })); // matrícula
   const body = new T.MeshStandardMaterial({ color: paint, metalness: 0.25, roughness: 0.34 });
-  for (const sz of [-1, 1]) box(0.14, 0.09, 0.16, t.wind - 0.12, p.H[at(t.wind)] + 0.07, sz * (p.hw[at(t.wind)] * 0.93 + 0.07), body); // retrovisores
+  const mirror = new T.MeshStandardMaterial({ color: roofC, metalness: 0.25, roughness: 0.34 });
+  for (const sz of [-1, 1]) box(0.14, 0.09, 0.16, t.wind - 0.12, p.H[at(t.wind)] + 0.07, sz * (p.hw[at(t.wind)] * 0.93 + 0.07), mirror); // retrovisores
   car3d.shadow.scale.set(t.len * 1.45, t.w * 2.1, 1);
   car3d.group = grp; car3d.scene.add(grp);
 }
@@ -639,7 +692,11 @@ function paintCar() {
   document.querySelectorAll('.pump:empty').forEach((el) => { el.innerHTML = PUMP_SVG; });
   $('car-types').innerHTML = CAR_TYPES.map((t) => `<button type="button" class="chip" role="radio" aria-checked="${t.k === state.car.type}" data-type="${t.k}">${t.n}</button>`).join('');
   $('car-eg').textContent = `${carType().eg} · ${fmt(carType().len, 1)} m de largo`;
-  $('car-colors').innerHTML = CAR_COLORS.map((c) => `<button type="button" role="radio" aria-checked="${c === state.car.color}" aria-label="Color ${c}" data-color="${c}" style="background:${c}"></button>`).join('');
+  const custom = (attr, val, on) => `<label class="sw-custom ${on ? 'on' : ''}" title="Otro color" style="${on ? `background:${val}` : ''}"><input type="color" ${attr} value="${val || '#888888'}" aria-label="Elegir otro color"></label>`;
+  $('car-colors').innerHTML = CAR_COLORS.map((c) => `<button type="button" role="radio" aria-checked="${c === state.car.color}" aria-label="Color ${c}" data-color="${c}" style="background:${c}"></button>`).join('')
+    + custom('data-pick="body"', state.car.color, !CAR_COLORS.includes(state.car.color));
+  $('roof-colors').innerHTML = ROOF_COLORS.map((c) => `<button type="button" role="radio" aria-checked="${c === (state.car.roof || '')}" aria-label="${c ? 'Techo ' + c : 'Techo del mismo color'}" data-roof="${c}" style="background:${c || state.car.color}">${c ? '' : '<span>Igual</span>'}</button>`).join('')
+    + custom('data-pick="roof"', state.car.roof || '#16181B', !!state.car.roof && !ROOF_COLORS.includes(state.car.roof));
 }
 
 function readCar() {
@@ -654,6 +711,7 @@ function readCar() {
     corridor: det.corridor, maxDetour: det.max,
     timeValue: Math.max(0, v('tiempo', 6)),
     noEarly: $('temprano').checked,
+    eat: state.eat === 'yes', meal: currentMeal(),
   };
 }
 function readDepart() {
@@ -671,18 +729,23 @@ function updateGauge() {
     <path d="M20 104A80 80 0 0 1 180 104" fill="none" stroke="var(--line)" stroke-width="14" stroke-linecap="round"/>
     <path d="M20 104A80 80 0 0 1 180 104" fill="none" stroke="${car.fuelNow <= car.reserve ? 'var(--red)' : 'var(--blue)'}" stroke-width="14" stroke-linecap="round" stroke-dasharray="${(LEN * pct).toFixed(1)} ${LEN}"/>
     <line x1="${(100 + 66 * Math.cos(ta)).toFixed(1)}" y1="${(104 + 66 * Math.sin(ta)).toFixed(1)}" x2="${(100 + 94 * Math.cos(ta)).toFixed(1)}" y2="${(104 + 94 * Math.sin(ta)).toFixed(1)}" stroke="var(--red)" stroke-width="3" stroke-linecap="round"/>
-    <g transform="rotate(${ang.toFixed(1)} 100 104)"><path d="M100 104V40" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/></g><circle cx="100" cy="104" r="7" fill="var(--ink)"/>
+    <g transform="rotate(${ang.toFixed(1)} 100 104)"><path d="M100 104V36" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/><circle cx="100" cy="34" r="9" fill="var(--surface)" stroke="var(--ink)" stroke-width="3"/></g><circle cx="100" cy="104" r="7" fill="var(--ink)"/>
     <text x="16" y="120" class="dl">R</text><text x="184" y="120" text-anchor="end" class="dl">Lleno</text></svg>`;
   $('nivel-out').textContent = `${fmt(car.fuelNow, 0)} L`;
   $('fuels').innerHTML = FUELS.map((f) => tile('data-k', f.k, f.k === state.fuel, f.n)).join('');
   $('umbral').innerHTML = THRESHOLDS.map((x) => tile('data-f', x.f, Math.abs(x.f - state.frac) < 0.01, x.n, `${x.d} · unos ${fmt(car.tank * x.f, 0)} L`)).join('');
+  const meal = currentMeal();
+  if (meal) {
+    $('comida-sub').textContent = `Pasarás por la hora de ${meal.n} entre las ${hhmm(new Date(meal.a))} y las ${hhmm(new Date(meal.b))}, hacia el km ${fmt(meal.kmA, 0)}–${fmt(meal.kmB, 0)}.`;
+    $('comida').innerHTML = tile('data-eat', 'yes', state.eat === 'yes', `Sí, aprovecho para ${meal.n}`, 'Busco gasolinera con restaurante al lado') + tile('data-eat', 'no', state.eat !== 'yes', 'No, solo gasolina', 'Paro lo justo');
+  }
   $('desvio').innerHTML = DETOURS.map((d) => tile('data-d', d.k, d.k === state.detour, d.n, d.d)).join('');
   $('tipico').innerHTML = `Lo normal en un ${t.k === 'suv' ? 'SUV' : t.n.toLowerCase()}: ${fmt(t.cons, 1)} L/100 km y ${t.tank} L. <button type="button" class="linkbtn inline" id="btn-tipico">Usar estos</button>`;
   $('umbral-out').textContent = car.fuelNow <= car.reserve
     ? `Ya estás por debajo de tu límite (${fmt(car.reserve, 0)} L, la marca roja): te buscaré la primera gasolinera que encuentres.`
     : `Tienes unos ${fmt(km, 0)} km antes de bajar de tu límite (${fmt(car.reserve, 0)} L, la marca roja).`;
   const fuelName = FUELS.find((f) => f.k === state.fuel).n, thr = THRESHOLDS.find((x) => Math.abs(x.f - state.frac) < 0.01) || THRESHOLDS[0], det = DETOURS.find((d) => d.k === state.detour) || DETOURS[1];
-  $('car-sum').textContent = `${t.n} · ${fuelName} · ${fmt(car.cons, 1)} L/100 km · ${fmt(car.tank, 0)} L · reposto ${thr.n.toLowerCase()} · ${det.n.toLowerCase()}`;
+  $('car-sum').textContent = `${t.n} · ${fuelName}${meal && state.eat === 'yes' ? ' · paro a ' + meal.n : ''} · ${fmt(car.cons, 1)} L/100 km · ${fmt(car.tank, 0)} L · reposto ${thr.n.toLowerCase()} · ${det.n.toLowerCase()}`;
 }
 function showQ(i, dir = 1) {
   state.q = i;
@@ -692,6 +755,9 @@ function showQ(i, dir = 1) {
     if (on) { c.classList.remove('in-f', 'in-b'); void c.offsetWidth; c.classList.add(dir >= 0 ? 'in-f' : 'in-b'); }
   });
   $('dots').innerHTML = QS.map((q, k) => `<i class="${k === i ? 'on' : k < i ? 'done' : ''}"></i>`).join('');
+  $('q-step').textContent = `${i + 1} de ${QS.length} · ${Q_NAMES[QS[i]]}`;
+  $('q-prev').disabled = i === 0;
+  $('q-next').disabled = i === QS.length - 1;
   $('btn-next').textContent = i < QS.length - 1 ? 'Siguiente' : 'Buscar mi parada';
   $('btn-editcar').hidden = !(state.carDone && !state.editing);
   if (QS[i] === 'coche') start3D(); else stop3D();
@@ -705,7 +771,7 @@ function save() {
     localStorage.setItem('ruta95', JSON.stringify({
       fuel: state.fuel, ...Object.fromEntries(FIELDS.map((k) => [k, $(k).value])),
       discounts: state.discounts, skin: document.documentElement.dataset.skin || '',
-      car: state.car, frac: state.frac, detour: state.detour, carDone: state.carDone,
+      car: state.car, frac: state.frac, detour: state.detour, eat: state.eat, carDone: state.carDone,
       avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, recents: state.recents,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
       stops: state.stops.filter((x) => x.place).map((x) => x.place),
@@ -719,7 +785,8 @@ function restore() {
     if (FUELS.some((f) => f.k === d.fuel)) state.fuel = d.fuel;
     for (const k of FIELDS) if (d[k] != null && d[k] !== '') $(k).value = d[k];
     if (d.discounts && typeof d.discounts === 'object') state.discounts = d.discounts;
-    if (d.car && CAR_COLORS.includes(d.car.color)) state.car = { type: CAR_TYPES.some((t) => t.k === d.car.type) ? d.car.type : 'com', color: d.car.color };
+    if (d.car && HEX.test(d.car.color)) state.car = { type: CAR_TYPES.some((t) => t.k === d.car.type) ? d.car.type : 'com', color: d.car.color, roof: HEX.test(d.car.roof || '') ? d.car.roof : '' };
+    if (d.eat === 'yes' || d.eat === 'no') state.eat = d.eat;
     if (THRESHOLDS.some((t) => Math.abs(t.f - d.frac) < 0.01)) state.frac = d.frac;
     if (DETOURS.some((x) => x.k === d.detour)) state.detour = d.detour;
     state.carDone = !!d.carDone;
@@ -961,7 +1028,7 @@ function renderList(P) {
   }
   const li = [...groups.values()].slice(0, 8).map(({ pl, more }) => {
     const c = st(pl);
-    const tags = [P.chosen === pl ? '<span class="tag">Recomendada</span>' : '', pl === cheapest ? '<span class="tag">Más barata</span>' : '', pl === quick ? '<span class="tag">Menos desvío</span>' : ''].join('');
+    const tags = [P.chosen === pl ? '<span class="tag">Recomendada</span>' : '', pl === cheapest ? '<span class="tag">Más barata</span>' : '', pl === quick ? '<span class="tag">Menos desvío</span>' : '', c.mealOk ? '<span class="tag food">Para comer</span>' : ''].join('');
     const cls = pl.net > 0.005 ? 'pos' : pl.net < -0.005 ? 'negv' : '';
     return `<li>
       <div class="kmtag">km<b>${fmt(c.km, 0)}</b></div>
@@ -976,7 +1043,8 @@ function renderList(P) {
 }
 
 function renderStopBlock(leg, n, total, car) {
-  const c = leg.s;
+  const c = leg.s, pa = leg.arrive / car.tank * 100, pl = leg.L / car.tank * 100, pr = car.reserve / car.tank * 100;
+  const food = c.food && c.food.length ? `<p class="food"><b>Para comer al lado:</b> ${c.food.map((f) => `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.name + ' ' + f.lat.toFixed(5) + ',' + f.lon.toFixed(5))}" target="_blank" rel="noopener">${esc(f.name)}</a> (${fmt(f.d, 0)} m)`).join(' · ')}</p>` : '';
   return `<div class="best-head">
       <div class="hito" aria-label="Kilómetro ${fmt(c.km, 0)} de tu ruta"><i>KM</i><b>${fmt(c.km, 0)}</b></div>
       <div class="best-id"><span class="eyebrow">${total > 1 ? `Parada ${n} de ${total} · ` : ''}Hacia las ${hhmm(c.eta)}</span><h2>${esc(stName(c))}</h2></div>
@@ -986,11 +1054,38 @@ function renderStopBlock(leg, n, total, car) {
         <p>Desvío de ${approx(c)}${fmt(c.detourKm, 1)} km, ${mins(c.detourMin)}</p>
       </div>
     </div>
-    <div class="stats">
-      <div><small>Llegas con</small><b>${fmt(leg.arrive, 0)} L</b><small>${fmt(leg.arrive / car.tank * 100, 0)} % del depósito</small></div>
-      <div><small>${leg.full ? 'Llenas' : 'Echas solo'}</small><b>${fmt(leg.L, 0)} L</b><small>${leg.full ? 'hasta arriba' : 'lo justo para seguir'}</small></div>
-      <div><small>Pagas unos</small><b>${eur(leg.pay)}</b><small>a ${fmt(c.price, 3)} €/L</small></div>
+    ${food}
+    <div class="fill" role="img" aria-label="Llegas con ${fmt(leg.arrive, 0)} litros y echas ${fmt(leg.L, 0)}">
+      <div class="fill-bar"><i class="have" style="width:${pa.toFixed(1)}%"></i><i class="add" style="left:${pa.toFixed(1)}%;width:${pl.toFixed(1)}%"></i><i class="lim" style="left:${pr.toFixed(1)}%"></i></div>
+      <div class="fill-l"><span><i class="k have"></i>Llegas con <b>${fmt(leg.arrive, 0)} L</b></span><span><i class="k add"></i>${leg.full ? 'Llenas' : 'Echas'} <b>${fmt(leg.L, 0)} L</b></span><span>Pagas <b>${eur(leg.pay)}</b></span></div>
     </div>`;
+}
+
+/* El depósito a lo largo del viaje: baja con los km, sube en cada parada. */
+function renderTank(P) {
+  const ch = P.chosen, car = P.car, W = 340, H = 168, L = 10, R = 10, T = 26, B = 26;
+  const x = (km) => L + (km / P.D) * (W - L - R), y = (l) => T + (1 - l / car.tank) * (H - T - B);
+  const pts = [[0, car.fuelNow]];
+  for (const lg of ch.legs) pts.push([lg.s.km, lg.arrive], [lg.s.km, lg.arrive + lg.L]);
+  pts.push([P.D, ch.endFuel]);
+  const line = pts.map(([k, l]) => `${x(k).toFixed(1)},${y(l).toFixed(1)}`).join(' ');
+  const lab = (k, l, t, dy, anchor) => `<text x="${x(k).toFixed(1)}" y="${(y(l) + dy).toFixed(1)}" text-anchor="${anchor}" class="tl">${t}</text>`;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Litros en el depósito a lo largo del viaje">`;
+  s += `<polygon points="${x(0)},${H - B} ${line} ${x(P.D)},${H - B}" fill="var(--blue-soft)"/>`;
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(car.tank)}" y2="${y(car.tank)}" stroke="var(--line)"/><text x="${W - R}" y="${y(car.tank) - 5}" text-anchor="end" class="ta">Lleno · ${fmt(car.tank, 0)} L</text>`;
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(car.reserve)}" y2="${y(car.reserve)}" stroke="var(--red)" stroke-dasharray="4 3"/><text x="${W - R}" y="${y(car.reserve) - 5}" text-anchor="end" class="ta red">Tu límite · ${fmt(car.reserve, 0)} L</text>`;
+  s += `<line x1="${L}" x2="${W - R}" y1="${H - B}" y2="${H - B}" stroke="var(--muted)"/>`;
+  s += `<polyline class="tline" points="${line}" fill="none" stroke="var(--blue)" stroke-width="3" stroke-linejoin="round"/>`;
+  s += lab(0, car.fuelNow, `${fmt(car.fuelNow, 0)} L`, -8, 'start');
+  for (const lg of ch.legs) {
+    const k = lg.s.km, a = x(k) < 60 ? 'start' : x(k) > W - 60 ? 'end' : 'middle';
+    s += `<line x1="${x(k)}" x2="${x(k)}" y1="${y(lg.arrive)}" y2="${y(lg.arrive + lg.L)}" stroke="var(--good)" stroke-width="3"/>`;
+    s += `<circle cx="${x(k)}" cy="${y(lg.arrive)}" r="4" fill="var(--surface)" stroke="var(--blue)" stroke-width="2"/><circle cx="${x(k)}" cy="${y(lg.arrive + lg.L)}" r="4" fill="var(--good)"/>`;
+    s += lab(k, lg.arrive, `llegas ${fmt(lg.arrive, 0)} L`, 16, a) + lab(k, lg.arrive + lg.L, `sales ${fmt(lg.arrive + lg.L, 0)} L`, -9, a);
+  }
+  s += `<circle cx="${x(P.D)}" cy="${y(ch.endFuel)}" r="4" fill="var(--blue)"/>` + lab(P.D, ch.endFuel, `${fmt(ch.endFuel, 0)} L`, -9, 'end');
+  s += `<text x="${L}" y="${H - 8}" class="ta">${esc(state.origin.name)}</text><text x="${W - R}" y="${H - 8}" text-anchor="end" class="ta">${esc(state.dest.name)}</text>`;
+  return `<section class="card tank"><h3>Tu depósito durante el viaje</h3>${s}</svg></section>`;
 }
 
 /* Lo mismo en otros sitios: cuánto costarían esos mismos litros en las alternativas y a precio normal. */
@@ -1046,6 +1141,11 @@ function renderResult() {
     const e = P.earlyBest.stops[0];
     infos.push(`Si no te importara parar en la primera hora, en el km ${fmt(e.km, 0)} (${esc(stName(e))}, ${esc(stTown(e))}) ahorrarías ${eur(P.earlyBest.net - ch.net)} más.`);
   } else if (P.car.noEarly && ch.stops[0].early) infos.push('No hay parada posible después de la primera hora, así que te propongo una antes.');
+  if (car.eat && car.meal) {
+    if (ch.meal) infos.push(`Tu parada cae a la hora de ${car.meal.n} y tiene sitio para comer al lado.`);
+    else if (P.foodFailed) infos.push('No he podido consultar los restaurantes cercanos ahora mismo.');
+    else infos.push(`No he encontrado una gasolinera con sitio para comer en el tramo de la hora de ${car.meal.n} que te compense; esta es la mejor para repostar.`);
+  }
   if (P.detourRelaxed) infos.push('Ninguna parada cumple tu límite de desvío, así que te propongo la mejor de las que hay.');
   if (P.closed) infos.push(`${P.closed} ${P.closed === 1 ? 'gasolinera descartada porque estará cerrada' : 'gasolineras descartadas porque estarán cerradas'} cuando pases.`);
   $('t-plan').innerHTML = `${warns.length ? `<div class="note">${warns.map((w) => `<p>${w}</p>`).join('')}</div>` : ''}
@@ -1064,6 +1164,7 @@ function renderResult() {
         </dl>
       </details>
     </article>
+    ${renderTank(P)}
     ${renderCompare(P)}
     ${trip}<div class="infos">${infos.map((t) => `<p>${t}</p>`).join('')}<button type="button" class="linkbtn" id="btn-here">Ya estoy en ruta: recalcular desde donde estoy</button></div>`;
   $('t-precios').innerHTML = renderChart(P);
@@ -1127,7 +1228,7 @@ function showOnMap(id) {
 
 /* ---------- Navegación entre paneles ---------- */
 const NEXT_LABEL = ['Ver el camino', 'Elegir esta ruta', 'Buscar mi parada', 'Nueva búsqueda'];
-const STEP_NAMES = ['Gasolineras de la ruta', 'Desvíos reales', 'Mejor plan'];
+const STEP_NAMES = () => ['Gasolineras de la ruta', 'Desvíos reales', ...(state.eat === 'yes' && currentMeal() ? ['Sitios para comer'] : []), 'Mejor plan'];
 function go(i) {
   const prev = state.panel;
   state.panel = i;
@@ -1144,11 +1245,11 @@ function go(i) {
   status('');
   if (i === 1) renderRoutes();
   const pan = $('p' + i); pan.classList.remove('in-f', 'in-b'); void pan.offsetWidth; pan.classList.add(i >= prev ? 'in-f' : 'in-b');
-  if (i === 2) { paintCar(); showQ(state.carDone && !state.editing ? QS.length - 1 : state.q || 0, i >= prev ? 1 : -1); } else stop3D();
+  if (i === 2) { buildQS(); paintCar(); showQ(state.carDone && !state.editing ? QS.length - 1 : Math.min(state.q || 0, QS.length - 1), i >= prev ? 1 : -1); } else stop3D();
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
 function progress(i) {
-  $('steps').innerHTML = STEP_NAMES.map((t, k) => `<li class="${k < i ? 'done' : k === i ? 'active' : ''}">${t}</li>`).join('');
+  $('steps').innerHTML = STEP_NAMES().map((t, k) => `<li class="${k < i ? 'done' : k === i ? 'active' : ''}">${t}</li>`).join('');
 }
 function busy(on, label) {
   const b = $('btn-next');
@@ -1191,7 +1292,8 @@ async function stepCompute() {
     let measured = true;
     progress(1);
     if (P.short.length) { try { await refineDetours(P); } catch (_) { measured = false; } }
-    progress(2);
+    if (car.eat && car.meal && P.mealCands && P.mealCands.length) { progress(2); try { await findFood(P.mealCands, car.meal); } catch (_) { P.foodFailed = true; } }
+    progress(STEP_NAMES().length - 1);
     solve(P);
     renderResult();
     busy(false);
@@ -1200,6 +1302,9 @@ async function stepCompute() {
 }
 
 function init() {
+  // Que se comporte como una app: sin zoom con los dedos ni con doble toque
+  for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   restore();
   renderDiscounts(); paintCar(); updateGauge(); updateWhen();
   setupPlace($('origen'), $('sugg-origen'), (pl) => { state.origin = pl; });
@@ -1256,6 +1361,46 @@ function init() {
   $('fuels').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) { state.fuel = b.dataset.k; updateGauge(); save(); auto(); } });
   $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; paintCar(); build3D(); updateGauge(); save(); } });
   $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); build3D(); save(); } });
+  $('roof-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-roof]'); if (b) { state.car.roof = b.dataset.roof; paintCar(); build3D(); save(); } });
+  const onPick = (e) => {
+    const k = e.target.dataset.pick;
+    if (!k) return;
+    if (k === 'body') state.car.color = e.target.value; else state.car.roof = e.target.value;
+    document.querySelectorAll('.veh').forEach((el) => { el.innerHTML = carSVG(); });
+    build3D();
+    if (e.type === 'change') { paintCar(); save(); }
+  };
+  $('deck').addEventListener('input', onPick);
+  $('deck').addEventListener('change', onPick);
+  $('comida').addEventListener('click', (e) => { const b = e.target.closest('[data-eat]'); if (b) { state.eat = b.dataset.eat; updateGauge(); save(); auto(); } });
+  $('q-prev').addEventListener('click', () => { if (state.q > 0) showQ(state.q - 1, -1); });
+  $('q-next').addEventListener('click', () => { if (state.q < QS.length - 1) showQ(state.q + 1, 1); });
+  // Deslizar para pasar de tarjeta (menos sobre el coche 3D, la aguja y las barras)
+  let sx = null, sy = 0;
+  $('deck').addEventListener('touchstart', (e) => { if (e.target.closest('#car3d, #dial, input, .swatches')) { sx = null; return; } sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  $('deck').addEventListener('touchend', (e) => {
+    if (sx == null) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    sx = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx < 0 && state.q < QS.length - 1) showQ(state.q + 1, 1);
+    if (dx > 0 && state.q > 0) showQ(state.q - 1, -1);
+  }, { passive: true });
+  // La aguja del depósito se puede arrastrar
+  const dial = $('dial');
+  const fromPointer = (e) => {
+    const svg = dial.querySelector('svg'); if (!svg) return;
+    const r = svg.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width * 200, py = (e.clientY - r.top) / r.height * 122;
+    let ang = Math.atan2(104 - py, px - 100);
+    if (ang < 0) ang = px < 100 ? Math.PI : 0;
+    const v = Math.min(100, Math.max(5, Math.round((1 - ang / Math.PI) * 20) * 5));
+    if (+$('nivel').value !== v) { $('nivel').value = v; updateGauge(); }
+  };
+  dial.addEventListener('pointerdown', (e) => { dial.setPointerCapture(e.pointerId); dial.dataset.drag = '1'; fromPointer(e); });
+  dial.addEventListener('pointermove', (e) => { if (dial.dataset.drag) fromPointer(e); });
+  const endDrag = () => { if (dial.dataset.drag) { delete dial.dataset.drag; save(); } };
+  dial.addEventListener('pointerup', endDrag); dial.addEventListener('pointercancel', endDrag);
   $('umbral').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { state.frac = +b.dataset.f; updateGauge(); save(); auto(); } });
   $('desvio').addEventListener('click', (e) => { const b = e.target.closest('[data-d]'); if (b) { state.detour = b.dataset.d; updateGauge(); save(); auto(); } });
   $('deck').addEventListener('click', (e) => {

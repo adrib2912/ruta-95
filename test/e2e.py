@@ -38,6 +38,12 @@ def handle(route):
         qs=dict(x.split('=') for x in q.split('&')); src=[int(x) for x in qs['sources'].split(';')]; dst=[int(x) for x in qs['destinations'].split(';')]
         D=[[hav((pts[s][1],pts[s][0]),(pts[d][1],pts[d][0]))*1300 for d in dst] for s in src]
         return route.fulfill(json={"code":"Ok","distances":D,"durations":[[x/1000/70*3600 for x in row] for row in D]})
+    if 'interpreter' in u:
+        els=[]
+        for k,s in enumerate(lista[:420:7]):
+            la=float(s["Latitud"].replace(',','.')); lo=float(s["Longitud (WGS84)"].replace(',','.'))
+            els.append({"type":"node","id":k,"lat":la+0.001,"lon":lo,"tags":{"amenity":"restaurant","name":f"Casa Paco {k}"}})
+        return route.fulfill(json={"elements":els})
     if 'photon' in u or 'nominatim' in u: return route.fulfill(json={"features":[]} if 'photon' in u else [])
     if 'three.min.js' in u: return route.fulfill(path='/tmp/t/node_modules/three/build/three.min.js')
     if 'leaflet.min.js' in u: return route.fulfill(path='/tmp/t/node_modules/leaflet/dist/leaflet.js')
@@ -47,34 +53,39 @@ def handle(route):
 H=functools.partial(http.server.SimpleHTTPRequestHandler, directory=ROOT)
 H.log_message=lambda *a,**k: None
 srv=http.server.ThreadingHTTPServer(('127.0.0.1',8765),H); threading.Thread(target=srv.serve_forever,daemon=True).start()
-DUMP="""()=>{const p=state.plan,c=p.chosen;return JSON.stringify({D:Math.round(p.D),range:Math.round(p.rangeKm),reserve:p.car.reserve,must:p.mustRefuel,closed:p.closed,singles:p.singles.length,legs:c.legs.map(l=>({km:Math.round(l.s.km),p:l.s.price,L:+l.L.toFixed(1)})),net:+c.net.toFixed(2),toll:p.route.tollKm|0,early:p.earlyBest?+p.earlyBest.net.toFixed(2):null,info:document.querySelector('.infos').innerText.slice(0,260)})}"""
+DUMP="""()=>{const p=state.plan,c=p.chosen;return JSON.stringify({D:Math.round(p.D),range:Math.round(p.rangeKm),reserve:p.car.reserve,must:p.mustRefuel,closed:p.closed,singles:p.singles.length,legs:c.legs.map(l=>({km:Math.round(l.s.km),p:l.s.price,L:+l.L.toFixed(1)})),net:+c.net.toFixed(2),toll:p.route.tollKm|0,early:p.earlyBest?+p.earlyBest.net.toFixed(2):null,meal:c.meal,food:(c.stops[0].food||[]).length,info:document.querySelector('.infos').innerText.slice(0,300)})}"""
 with sync_playwright() as p:
     b=p.chromium.launch()
     for scheme in ['light','dark']:
         pg=b.new_page(viewport={'width':390,'height':844}, device_scale_factor=2, color_scheme=scheme)
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e))); pg.on('console', lambda m: errs.append(m.text) if m.type=='error' and 'ERR_FAILED' not in m.text and 'Failed to load resource' not in m.text else None)
         pg.route('**/*', handle); pg.goto('http://127.0.0.1:8765/index.html'); pg.wait_for_timeout(800)
+        pg.click('#btn-when'); pg.fill('#salida', '2026-11-16T11:30')
         pg.click('#origen'); pg.keyboard.type('mad'); pg.wait_for_timeout(150)
         sug=pg.locator('#sugg-origen li').all_inner_texts(); pg.locator('#sugg-origen li').first.dispatch_event('pointerdown')
         pg.click('#destino'); pg.keyboard.type('valen'); pg.wait_for_timeout(150); pg.locator('#sugg-destino li').first.dispatch_event('pointerdown')
         pg.screenshot(path=f'{OUT}/w1-{scheme}.png')
         pg.click('#btn-next'); pg.wait_for_selector('#alts button'); pg.wait_for_timeout(500)
         alts=pg.locator('#alts button').all_inner_texts(); pg.screenshot(path=f'{OUT}/w2-{scheme}.png')
-        pg.click('#btn-next'); pg.wait_for_timeout(900); pg.click('[data-type="suv"]'); pg.click('[data-color="#D5202A"]'); pg.wait_for_timeout(700)
+        pg.click('#btn-next'); pg.wait_for_timeout(900); pg.click('[data-type="suv"]'); pg.click('[data-color="#D5202A"]'); pg.click('[data-roof="#16181B"]'); pg.wait_for_timeout(700)
         pg.screenshot(path=f'{OUT}/q0-{scheme}.png')
-        pg.click('#btn-next'); pg.wait_for_timeout(400); pg.screenshot(path=f'{OUT}/q1-{scheme}.png'); pg.click('[data-k="g95"]'); pg.wait_for_timeout(700)
-        pg.screenshot(path=f'{OUT}/q2-{scheme}.png'); pg.click('[data-step="consumo:0.1"]'); pg.click('#btn-next'); pg.wait_for_timeout(400)
-        pg.screenshot(path=f'{OUT}/q3-{scheme}.png'); pg.check('#temprano'); pg.click('[data-f="0.25"]'); pg.wait_for_timeout(700)
-        pg.screenshot(path=f'{OUT}/q4-{scheme}.png'); pg.click('[data-d="short"]'); pg.wait_for_timeout(700)
-        pg.screenshot(path=f'{OUT}/q5-{scheme}.png')
-        if scheme=='light': print('3d ok:', pg.evaluate('()=>car3d.ok'), 'q', pg.evaluate('()=>state.q'), 'cons', pg.evaluate("()=>document.getElementById('consumo').value"))
+        pg.click('#q-next'); pg.wait_for_timeout(350); pg.click('#q-prev'); pg.wait_for_timeout(350)
+        shots=0
+        while pg.locator('#btn-next').inner_text().strip().lower()!='buscar mi parada' and shots<10:
+            pg.click('#btn-next'); pg.wait_for_timeout(380); shots+=1
+            q=pg.evaluate('()=>QS[state.q]')
+            if q=='comida': pg.click('[data-eat="yes"]'); pg.wait_for_timeout(500)
+            if q=='umbral': pg.check('#temprano')
+            pg.screenshot(path=f'{OUT}/q{shots}-{scheme}.png')
+        box=pg.locator('#dial svg').bounding_box(); pg.mouse.move(box['x']+box['width']*0.5, box['y']+box['height']*0.85); pg.mouse.down(); pg.mouse.move(box['x']+box['width']*0.78, box['y']+box['height']*0.2, steps=5); pg.mouse.up()
+        if scheme=='light': print('QS', pg.evaluate('()=>QS.join(",")'), '| nivel tras arrastrar', pg.evaluate("()=>document.getElementById('nivel').value"), '| 3d', pg.evaluate('()=>car3d.ok'))
         pg.click('#btn-next'); pg.wait_for_selector('.best', timeout=20000); pg.wait_for_timeout(1800)
-        pg.screenshot(path=f'{OUT}/w4-{scheme}.png')
+        pg.screenshot(path=f'{OUT}/w4-{scheme}.png', full_page=True)
         if scheme=='light':
             print('sugg', sug, '| alts', alts); print(pg.evaluate(DUMP))
             for t in ['precios','mapa','otras']:
                 pg.click(f'[data-tab="{t}"]'); pg.wait_for_timeout(500); pg.screenshot(path=f'{OUT}/w4-{t}.png')
             pg.click('[data-show]'); pg.wait_for_timeout(400); print('popup', pg.locator('.leaflet-popup-content').count())
-            pg.click('#btn-back'); pg.wait_for_timeout(300); print('atajo q', pg.evaluate('()=>state.q')); pg.click('#btn-back'); pg.click('[data-alt="1"]'); pg.click('#btn-next'); pg.wait_for_timeout(300); pg.click('#btn-next'); pg.wait_for_selector('.best'); pg.wait_for_timeout(1500); print(pg.evaluate(DUMP))
+            pg.screenshot(path=f'{OUT}/res-full.png', full_page=True); pg.click('#btn-back'); pg.wait_for_timeout(300); print('atajo q', pg.evaluate('()=>state.q')); pg.click('#btn-back'); pg.click('[data-alt="1"]'); pg.click('#btn-next'); pg.wait_for_timeout(300); pg.click('#btn-next'); pg.wait_for_selector('.best'); pg.wait_for_timeout(1500); print(pg.evaluate(DUMP))
         print(scheme,'errors:',errs)
     b.close()
