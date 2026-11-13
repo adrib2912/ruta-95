@@ -460,3 +460,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .top { justify-content: space-between; } .top > div { flex: 1; min-width: 0; }
 .themebtn { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); display: grid; place-items: center; }
 .themebtn svg { width: 22px; height: 22px; }
+
+/* Animación del viaje */
+.tour { position: relative; padding: 0; overflow: hidden; }
+.tourmap { height: 300px; background: var(--line); z-index: 0; }
+.tourcar { position: absolute; left: 0; top: 0; transform: translate(-50%, -50%); pointer-events: none; filter: drop-shadow(0 3px 3px rgba(0,0,0,.35)); }
+.tourcar canvas { display: block; width: 90px; height: 70px; }
+.tourcar .veh2d { display: block; width: 56px; }
+.hud { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 500; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px); border-radius: 14px; padding: 9px 12px; box-shadow: 0 4px 14px rgba(0,0,0,.18); font-size: 14px; font-weight: 600; }
+#tour-msg { min-width: 0; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hud-r { display: flex; align-items: center; gap: 8px; flex: none; }
+.hud-r b { font: 700 17px var(--f-display); font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
+.hud-tank { position: relative; width: 58px; height: 14px; border-radius: 4px; border: 2px solid var(--ink); overflow: hidden; display: block; }
+.hud-tank i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--blue); transition: width .12s linear; }
+.hud-tank i.low { background: var(--red); }
+.replay { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 18px; border: 0; background: var(--surface); color: var(--ink); font-weight: 700; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+.tour .pin { margin-top: -30px; }

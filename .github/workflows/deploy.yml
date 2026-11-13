@@ -22,6 +22,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Descargar precios del Ministerio
         run: node scripts/fetch-prices.mjs || echo "Sin copia de precios; la web los pedirá en directo"
+      - name: Semana actual
+        id: week
+        run: echo "week=$(date +%G-%V)" >> "$GITHUB_OUTPUT"
+      - name: Restaurantes de la semana (caché)
+        id: rcache
+        uses: actions/cache@v4
+        with:
+          path: data/restaurantes.json
+          key: restaurantes-${{ steps.week.outputs.week }}
+      - name: Descargar restaurantes junto a gasolineras
+        if: steps.rcache.outputs.cache-hit != 'true'
+        timeout-minutes: 15
+        run: node scripts/fetch-restaurants.mjs || echo "Sin restaurantes esta vez; la web los pedirá en directo"
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

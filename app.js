@@ -283,8 +283,32 @@ function mealWindow(route, depart) {
 }
 
 /* Restaurantes a menos de 450 m de cada gasolinera, de OpenStreetMap. */
+let foodIdx = null;
+async function localFood() {
+  if (foodIdx) return foodIdx;
+  const j = await getJSON('data/restaurantes.json', { cache: 'force-cache' }, 20000);
+  if (!j || !Array.isArray(j.r) || !j.r.length) throw new Error('sin fichero');
+  const grid = new Map();
+  for (const r of j.r) { const k = Math.floor(r[0] / 0.01) + ':' + Math.floor(r[1] / 0.01); if (!grid.has(k)) grid.set(k, []); grid.get(k).push({ lat: r[0], lon: r[1], name: r[2], type: r[3] === 'f' ? 'fast_food' : 'restaurant' }); }
+  return (foodIdx = grid);
+}
+function setFood(cands, places, meal) {
+  for (const c of cands) {
+    const seen = new Set();
+    c.food = places(c).map((f) => ({ ...f, d: hav(c.lat, c.lon, f.lat, f.lon) * 1000 })).filter((f) => f.d <= 400 && !seen.has(f.name) && seen.add(f.name)).sort((a, b) => a.d - b.d).slice(0, 3);
+    const t = c.eta.getTime();
+    c.mealOk = c.food.length > 0 && t >= meal.a - 15 * 60000 && t <= meal.b + 15 * 60000;
+  }
+}
 async function findFood(cands, meal) {
   if (!cands || !cands.length) return;
+  // 1) El fichero que prepara GitHub cada semana (rápido y sin depender de nadie)
+  try {
+    const grid = await localFood();
+    setFood(cands, (c) => { const out = [], cy = Math.floor(c.lat / 0.01), cx = Math.floor(c.lon / 0.01); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) out.push(...(grid.get((cy + dy) + ':' + (cx + dx)) || [])); return out; }, meal);
+    return;
+  } catch (_) { /* sin fichero: se consulta en directo */ }
+  // 2) En directo a OpenStreetMap
   // Consulta ligera (solo puntos, 400 m) a los tres servidores a la vez; vale la primera respuesta buena, con 12 s como máximo
   const q = `[out:json][timeout:10];(${cands.slice(0, 15).map((c) => `node(around:400,${c.lat.toFixed(5)},${c.lon.toFixed(5)})[amenity~"^(restaurant|fast_food)$"];`).join('')});out tags;`;
   const one = (base) => getJSON(base + '?data=' + encodeURIComponent(q), {}, 12000).then((r) => {
@@ -295,12 +319,7 @@ async function findFood(cands, meal) {
   const j = await anyOk(OVERPASS.map(one));
   const places = j.elements.map((e) => ({ name: e.tags && e.tags.name, type: e.tags && e.tags.amenity, lat: e.lat, lon: e.lon }))
     .filter((x) => x.name && x.lat != null);
-  for (const c of cands) {
-    const seen = new Set();
-    c.food = places.map((f) => ({ ...f, d: hav(c.lat, c.lon, f.lat, f.lon) * 1000 })).filter((f) => f.d <= 400 && !seen.has(f.name) && seen.add(f.name)).sort((a, b) => a.d - b.d).slice(0, 3);
-    const t = c.eta.getTime();
-    c.mealOk = c.food.length > 0 && t >= meal.a - 15 * 60000 && t <= meal.b + 15 * 60000;
-  }
+  setFood(cands, () => places, meal);
 }
 
 function solve(P) {
@@ -628,8 +647,13 @@ function loft(T, xs, section, color, rho, rhoU = rho) {
 }
 function build3D() {
   if (!car3d.ok) return;
-  const T = window.THREE, t = carType(), p = carProfile(t, 96), paint = state.car.color, roofC = state.car.roof || state.car.color;
   if (car3d.group) car3d.scene.remove(car3d.group);
+  const grp = makeCarGroup(window.THREE);
+  car3d.shadow.scale.set(carType().len * 1.45, carType().w * 2.1, 1);
+  car3d.group = grp; car3d.scene.add(grp);
+}
+function makeCarGroup(T) {
+  const t = carType(), p = carProfile(t, 96), paint = state.car.color, roofC = state.car.roof || state.car.color;
   const grp = new T.Group();
   const shell = new T.MeshStandardMaterial({ vertexColors: true, metalness: 0.25, roughness: 0.34 });
   const TRIM = '#23272c', GLASS = '#16222e';
@@ -669,8 +693,8 @@ function build3D() {
   const body = new T.MeshStandardMaterial({ color: paint, metalness: 0.25, roughness: 0.34 });
   const mirror = new T.MeshStandardMaterial({ color: roofC, metalness: 0.25, roughness: 0.34 });
   for (const sz of [-1, 1]) box(0.14, 0.09, 0.16, t.wind - 0.12, p.H[at(t.wind)] + 0.07, sz * (p.hw[at(t.wind)] * 0.93 + 0.07), mirror); // retrovisores
-  car3d.shadow.scale.set(t.len * 1.45, t.w * 2.1, 1);
-  car3d.group = grp; car3d.scene.add(grp);
+  grp.scale.setScalar(1);
+  return grp;
 }
 function loop3D() {
   if (!car3d.ok) return;
@@ -968,6 +992,134 @@ function renderRoutes() {
 }
 
 /* ---------- Panel 4: resultado ---------- */
+/* Animación del viaje: el coche 3D recorre la ruta en el mapa, para a repostar y sigue hasta el destino. */
+const tour = { map: null, raf: 0, gl: null, scene: null, cam: null, car: null, mk: null };
+function tourRender(heading) {
+  if (!tour.gl) return;
+  tour.car.rotation.y = -heading;
+  tour.gl.render(tour.scene, tour.cam);
+}
+function setupTourCar() {
+  const T = window.THREE;
+  if (!T) return null;
+  try {
+    if (!tour.gl) {
+      const cv = document.createElement('canvas'); cv.width = 180; cv.height = 140;
+      tour.gl = new T.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
+      tour.gl.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); tour.gl.setSize(90, 70, false);
+      tour.scene = new T.Scene();
+      tour.scene.add(new T.HemisphereLight(0xffffff, 0x77838f, 0.95));
+      const sun = new T.DirectionalLight(0xffffff, 0.9); sun.position.set(3, 8, 5); tour.scene.add(sun);
+      tour.cam = new T.PerspectiveCamera(30, 90 / 70, 0.1, 80);
+      tour.cam.position.set(0, 9.5, 8.5); tour.cam.lookAt(0, 0.4, 0);
+    }
+    if (tour.car) tour.scene.remove(tour.car);
+    tour.car = makeCarGroup(T); tour.scene.add(tour.car);
+    return tour.gl.domElement;
+  } catch (_) { tour.gl = null; return null; }
+}
+function renderTour(P) {
+  return `<section class="tour card"><div id="tour" class="tourmap"></div>
+    <div class="hud"><span id="tour-msg">Rumbo a la gasolinera</span><span class="hud-r"><b id="tour-km">km 0</b><i class="hud-tank"><i id="tour-fuel"></i></i></span></div>
+    <button type="button" class="replay" id="btn-replay" aria-label="Repetir la animación"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Repetir</button></section>`;
+}
+function playTour() {
+  const P = state.plan;
+  if (!window.L || !P || !P.chosen || !$('tour')) return;
+  cancelAnimationFrame(tour.raf);
+  if (tour.map) { tour.map.remove(); tour.map = null; }
+  const map = baseMap('tour');
+  map.dragging.disable(); map.touchZoom.disable(); map.doubleClickZoom.disable(); map.boxZoom.disable(); map.keyboard.disable();
+  const pts = P.route.coords.map((c) => [c[1], c[0]]);
+  const line = L.polyline(pts, { color: isDark() ? '#6AAEF7' : '#0B4EA2', weight: 5, opacity: 0.9 }).addTo(map);
+  const done = L.polyline([], { color: isDark() ? '#45D088' : '#0B7F45', weight: 6, opacity: 0.95 }).addTo(map);
+  const ch = P.chosen, car = P.car;
+  for (const c of ch.stops) L.marker([c.lat, c.lon], { icon: L.divIcon({ className: '', html: `<div class="pin top">${fmt(c.price, 3)} €</div>`, iconSize: [0, 0] }) }).addTo(map);
+  endDot(map, state.origin, state.origin.name); endDot(map, state.dest, state.dest.name);
+  const whole = line.getBounds();
+  map.fitBounds(whole, { padding: [28, 28] });
+  // Marcador del coche: el modelo 3D girando con la dirección, o el dibujo plano si no hay 3D
+  const cv = setupTourCar();
+  const el = document.createElement('div'); el.className = 'tourcar';
+  if (cv) el.appendChild(cv); else el.innerHTML = `<span class="veh2d">${carSVG()}</span>`;
+  const mk = L.marker(pts[0], { icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }), zIndexOffset: 2000 }).addTo(map);
+  mk.getElement().appendChild(el);
+  // Distancia acumulada de cada punto, para mover el coche a velocidad constante
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + hav(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]));
+  const kmScale = P.D / cum[cum.length - 1];
+  const at = (km) => {
+    const d = km / kmScale; let lo = 0, hi = cum.length - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < d) lo = m + 1; else hi = m; }
+    const i = Math.max(1, lo), k = (d - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
+    return { i, ll: [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * k, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * k] };
+  };
+  // Litros a lo largo del viaje (mismo perfil que el gráfico del depósito)
+  const fuelAt = (km, filled) => {
+    let fuel = car.fuelNow, pos = 0;
+    for (const [j, lg] of ch.legs.entries()) {
+      if (km < lg.s.km || (km === lg.s.km && !filled[j])) return fuel - (km - pos) * car.cons / 100;
+      fuel = lg.arrive + lg.L; pos = lg.s.km;
+    }
+    return fuel - (km - pos) * car.cons / 100;
+  };
+  // Guion: tramos de conducción y paradas, unos 10 segundos en total
+  const stopsKm = ch.stops.map((c) => c.km), legsKm = [0, ...stopsKm, P.D];
+  const DRIVE = 7000 / P.D, steps = [];
+  for (let j = 0; j < legsKm.length - 1; j++) {
+    steps.push({ type: 'drive', from: legsKm[j], to: legsKm[j + 1], ms: Math.max(900, (legsKm[j + 1] - legsKm[j]) * DRIVE), leg: j });
+    if (j < stopsKm.length) steps.push({ type: 'stop', km: stopsKm[j], ms: 2400, leg: j });
+  }
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const filled = ch.legs.map(() => false);
+  let si = 0, t0 = performance.now(), last = at(0), heading = 0, zoomed = false;
+  const hud = (km, fuel, msg) => {
+    $('tour-km').textContent = 'km ' + fmt(km, 0);
+    $('tour-fuel').style.width = Math.max(0, Math.min(100, fuel / car.tank * 100)).toFixed(1) + '%';
+    $('tour-fuel').classList.toggle('low', fuel <= car.reserve);
+    if (msg) $('tour-msg').textContent = msg;
+  };
+  const place = (km) => {
+    const p = at(km);
+    mk.setLatLng(p.ll);
+    const a = map.latLngToContainerPoint(last.ll), b = map.latLngToContainerPoint(p.ll);
+    if (Math.hypot(b.x - a.x, b.y - a.y) > 0.5) heading = Math.atan2(b.y - a.y, b.x - a.x);
+    last = p;
+    if (cv) tourRender(heading); else el.firstChild.style.transform = Math.cos(heading) < 0 ? 'scaleX(-1)' : '';
+  };
+  if (reduce) {       // sin animación: el coche directamente en la gasolinera
+    place(stopsKm[0]); hud(stopsKm[0], ch.legs[0].arrive, `Para aquí: ${stName(ch.stops[0])}, km ${fmt(stopsKm[0], 0)}`);
+    tour.map = map; return;
+  }
+  const frame = (now) => {
+    const st = steps[si];
+    if (!st) { hud(P.D, ch.endFuel, `Llegas a ${state.dest.name} con ${fmt(ch.endFuel, 0)} L`); map.dragging.enable(); map.touchZoom.enable(); return; }
+    const k = Math.min(1, (now - t0) / st.ms);
+    if (st.type === 'drive') {
+      const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+      const km = st.from + (st.to - st.from) * e;
+      place(km);
+      done.setLatLngs([...pts.slice(0, at(km).i), at(km).ll]);
+      const toStop = st.leg < stopsKm.length;
+      hud(km, fuelAt(km, filled), toStop ? (ch.stops.length > 1 ? `Rumbo a la parada ${st.leg + 1}` : 'Rumbo a la gasolinera') : `Rumbo a ${state.dest.name}`);
+    } else {
+      const lg = ch.legs[st.leg], c = lg.s;
+      if (!zoomed) { zoomed = true; map.flyTo([c.lat, c.lon], 12, { duration: 0.7 }); }
+      const fill = k < 0.3 ? 0 : Math.min(1, (k - 0.3) / 0.5);
+      hud(c.km, lg.arrive + lg.L * fill, `Reposta aquí: ${stName(c)}, ${stTown(c)} · +${fmt(lg.L * fill, 0)} L`);
+      tourRender(heading);
+    }
+    if (k >= 1) {
+      if (st.type === 'stop') { filled[st.leg] = true; zoomed = false; map.flyToBounds(whole, { padding: [28, 28], duration: 0.6 }); }
+      si++; t0 = now;
+    }
+    tour.raf = requestAnimationFrame(frame);
+  };
+  hud(0, car.fuelNow, ch.stops.length > 1 ? 'Rumbo a la parada 1' : 'Rumbo a la gasolinera');
+  tour.map = map;
+  setTimeout(() => { t0 = performance.now(); tour.raf = requestAnimationFrame(frame); }, 500);
+}
+
 function renderStrip(P) {
   const pct = (km) => Math.max(0, Math.min(100, km / P.D * 100));
   const stops = P.chosen.stops;
@@ -1155,7 +1307,7 @@ function renderResult() {
     showTab('plan'); return;
   }
   $('tabs').hidden = false;
-  $('strip').innerHTML = renderStrip(P);
+  $('strip').innerHTML = renderTour(P);
   const warns = [];
   if (P.outOfReach) warns.push(`Con lo que llevas no llegas a ninguna gasolinera de la ruta sin bajar de ${fmt(car.reserve, 0)} L. Reposta cuanto antes: estas son las primeras que encontrarás.`);
   if (P.incomplete && !P.outOfReach) warns.push('El viaje pide más de dos repostajes. Esta es la mejor primera parada; vuelve a calcular desde allí.');
@@ -1229,6 +1381,7 @@ function renderResult() {
   $('t-otras').innerHTML = renderList(P);
   state.mapDirty = true;
   showTab('plan');
+  requestAnimationFrame(() => playTour());
   // El ahorro se cuenta hacia arriba al aparecer
   const el = document.querySelector('.count');
   if (el && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -1506,6 +1659,7 @@ function init() {
     paintSkins(); paintTheme(); save(); state.mapDirty = true;
   });
 
+  $('strip').addEventListener('click', (e) => { if (e.target.closest('#btn-replay')) playTour(); });
   $('t-plan').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) { e.preventDefault(); go(+b.dataset.go); } });
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
   $('p3').addEventListener('click', async (e) => {
