@@ -774,7 +774,7 @@ function save() {
   try {
     localStorage.setItem('ruta95', JSON.stringify({
       fuel: state.fuel, ...Object.fromEntries(FIELDS.map((k) => [k, $(k).value])),
-      discounts: state.discounts, skin: document.documentElement.dataset.skin || '',
+      discounts: state.discounts, skin: document.documentElement.dataset.skin || '', theme: document.documentElement.dataset.theme || '',
       car: state.car, frac: state.frac, detour: state.detour, eat: state.eat, carDone: state.carDone,
       avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, recents: state.recents,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
@@ -930,7 +930,8 @@ const priceTxt = (c) => `${fmt(c.price, 3)} €/L${c.disc ? ` (con tu descuento 
 const tollTxt = (r) => (r.tollKm >= 1 ? `Peaje: unos ${fmt(r.tollKm, 0)} km${r.tollRefs.length ? ' (' + r.tollRefs.join(', ') + ')' : ''}` : 'Sin peajes');
 const isDark = () => {
   const skin = document.documentElement.dataset.skin;
-  return skin === 'asfalto' || (!skin && matchMedia('(prefers-color-scheme: dark)').matches);
+  const th = document.documentElement.dataset.theme;
+  return skin === 'asfalto' || (!skin && (th ? th === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches));
 };
 const smooth = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 function baseMap(id) {
@@ -1482,13 +1483,27 @@ function init() {
   for (const id of FIELDS) $(id).addEventListener('input', () => { if (id === 'nivel') updateGauge(); save(); });
   for (const id of ['consumo', 'deposito']) $(id).addEventListener('change', () => { updateGauge(); });
 
+  const SUN = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>';
+  const MOON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" fill="currentColor"/></svg>';
+  const paintTheme = () => { const dark = isDark(); $('btn-theme').innerHTML = dark ? SUN : MOON; $('btn-theme').setAttribute('aria-label', dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'); };
+  paintTheme();
+  $('btn-theme').addEventListener('click', () => {
+    const r = document.documentElement, dark = isDark();
+    delete r.dataset.skin;                       // el botón usa el aspecto Señal, en claro o en oscuro
+    r.dataset.theme = dark ? 'light' : 'dark';
+    paintTheme(); paintSkins(); save();
+    state.mapDirty = true;
+    if (state.panel === 1) renderRoutes();
+    if (state.panel === 3 && !$('t-mapa').hidden) renderMap();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', paintTheme);
   const paintSkins = () => { const cur = document.documentElement.dataset.skin || ''; document.querySelectorAll('[data-skin-btn]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.skinBtn === cur)); };
   paintSkins();
   $('skins').addEventListener('click', (e) => {
     const b = e.target.closest('[data-skin-btn]');
     if (!b) return;
     if (b.dataset.skinBtn) document.documentElement.dataset.skin = b.dataset.skinBtn; else delete document.documentElement.dataset.skin;
-    paintSkins(); save(); state.mapDirty = true;
+    paintSkins(); paintTheme(); save(); state.mapDirty = true;
   });
 
   $('t-plan').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) { e.preventDefault(); go(+b.dataset.go); } });

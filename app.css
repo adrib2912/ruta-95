@@ -24,12 +24,18 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-skin]) {
+  :root:not([data-skin]):not([data-theme="light"]) {
     --bg: #0D141B; --surface: #17212B; --ink: #EAF0F5; --muted: #94A4B2; --line: #2A3846;
     --blue: #6AAEF7; --blue-soft: #1B2F47; --red: #FF5C61; --good: #45D088; --good-soft: #143424;
     --warn: #F2B458; --warn-soft: #3A2C12; --cta-bg: #EAF0F5; --cta-ink: #0D141B;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"]:not([data-skin]) {
+    --bg: #0D141B; --surface: #17212B; --ink: #EAF0F5; --muted: #94A4B2; --line: #2A3846;
+    --blue: #6AAEF7; --blue-soft: #1B2F47; --red: #FF5C61; --good: #45D088; --good-soft: #143424;
+    --warn: #F2B458; --warn-soft: #3A2C12; --cta-bg: #EAF0F5; --cta-ink: #0D141B;
+    color-scheme: dark;
 }
 /* Aspecto "Asfalto": oscuro, con el amarillo de las marcas viales */
 :root[data-skin="asfalto"] {
@@ -450,3 +456,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 @keyframes fillup { from { transform: scaleY(0); } }
 @keyframes slosh { to { transform: translateX(-12px); } }
+
+.top { justify-content: space-between; } .top > div { flex: 1; min-width: 0; }
+.themebtn { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink); display: grid; place-items: center; }
+.themebtn svg { width: 22px; height: 22px; }
