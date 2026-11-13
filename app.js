@@ -1179,7 +1179,7 @@ function renderResult() {
   const el = document.querySelector('.count');
   if (el && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const to = +el.dataset.to, t0 = performance.now();
-    const tick = (now) => { const k = Math.min(1, (now - t0) / 800), e = 1 - Math.pow(1 - k, 3); el.textContent = eur(to * e); if (k < 1) requestAnimationFrame(tick); };
+    const tick = (now) => { const k = Math.min(1, Math.max(0, (now - t0) / 800)), e = 1 - Math.pow(1 - k, 3); el.textContent = eur(to * e); if (k < 1) requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
   }
 }
