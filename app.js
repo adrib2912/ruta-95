@@ -1,4 +1,4 @@
-/* Hito: elige la mejor parada para repostar a lo largo de una ruta. */
+/* Ruta 95: elige la mejor parada para repostar a lo largo de una ruta. */
 'use strict';
 
 const API = {
@@ -276,7 +276,7 @@ function updateGauge() {
 
 function save() {
   try {
-    localStorage.setItem('hito', JSON.stringify({
+    localStorage.setItem('ruta95', JSON.stringify({
       fuel: state.fuel, consumo: $('consumo').value, deposito: $('deposito').value, nivel: $('nivel').value,
       reserva: $('reserva').value, pasillo: $('pasillo').value, tiempo: $('tiempo').value,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
@@ -287,7 +287,7 @@ function save() {
 
 function restore() {
   try {
-    const d = JSON.parse(localStorage.getItem('hito') || 'null');
+    const d = JSON.parse(localStorage.getItem('ruta95') || 'null');
     if (!d) return;
     if (FUELS.some((f) => f.k === d.fuel)) state.fuel = d.fuel;
     for (const k of ['consumo', 'deposito', 'nivel', 'reserva', 'pasillo', 'tiempo']) if (d[k] != null && d[k] !== '') $(k).value = d[k];

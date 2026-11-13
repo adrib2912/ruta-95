@@ -9,7 +9,7 @@ const num = (v) => {
 };
 
 const res = await fetch(URL_MIN, {
-  headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (hito; GitHub Actions)' },
+  headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (ruta-95; GitHub Actions)' },
   signal: AbortSignal.timeout(90000),
 });
 if (!res.ok) throw new Error('El Ministerio respondió ' + res.status);

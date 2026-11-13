@@ -1,4 +1,4 @@
-/* Hito. Idea: señal de autovía (azul, borde blanco) + hito kilométrico (blanco, cabeza roja).
+/* Ruta 95. Idea: señal de autovía (azul, borde blanco) + hito kilométrico (blanco, cabeza roja).
    Una columna pensada para el móvil; los números van en condensada, como en la señalización. */
 :root {
   --bg: #ECEFF3;
@@ -54,7 +54,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 3px solid var(--red); outline-offset: 2px; }
 
 .top { display: flex; align-items: center; gap: 12px; padding: 4px 2px; }
-.logo { width: 34px; height: 41px; flex: none; }
+.logo { width: 44px; height: 44px; flex: none; }
 .top h1 { font: 700 34px/1 var(--f-display); letter-spacing: .01em; text-transform: uppercase; }
 .top p { color: var(--muted); font-size: 14px; margin-top: 2px; }
 
