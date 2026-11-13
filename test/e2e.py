@@ -26,7 +26,7 @@ for n in range(1200):
 def handle(route):
     u=route.request.url
     if 'minetur' in u: return route.fulfill(json={"Fecha":"13/11/2026 14:00:00","ListaEESSPrecio":lista})
-    if '/route/v1/' in u: return route.fulfill(json={"code":"Ok","routes":[{"legs":[{"distance":dist*400},{"distance":dist*600}],"distance":dist*1000,"duration":dist/105*3600,"geometry":{"coordinates":coords}}]})
+    if '/route/v1/' in u: return route.fulfill(json={"code":"Ok","routes":[{"legs":[{"summary":"A-3, M-30","distance":dist*400},{"summary":"A-3","distance":dist*600}],"distance":dist*1000,"duration":dist/105*3600,"geometry":{"coordinates":coords}},{"legs":[{"summary":"N-III","distance":dist*1000}],"distance":dist*1010,"duration":dist/90*3600,"geometry":{"coordinates":coords}}]})
     if '/table/v1/' in u:
         path=u.split('/driving/')[1]; cs,q=path.split('?'); pts=[tuple(map(float,c.split(','))) for c in cs.split(';')]
         qs=dict(x.split('=') for x in q.split('&')); src=[int(x) for x in qs['sources'].split(';')]; dst=[int(x) for x in qs['destinations'].split(';')]
@@ -55,9 +55,9 @@ with sync_playwright() as p:
         if scheme=='light':
             DUMP="""()=>{const p=state.plan,c=p.chosen;return JSON.stringify({D:Math.round(p.D),range:Math.round(p.rangeKm),full:Math.round(p.fullRangeKm),must:p.mustRefuel,ref:p.ref,kind:p.refKind,near:p.near.length,closed:p.closed,first:p.first.length,later:p.later.length,singles:p.singles.length,incomplete:p.incomplete,legs:c.legs.map(l=>({km:Math.round(l.s.km),p:l.s.price,L:+l.L.toFixed(1),full:l.full,h:l.s.s[8],dm:+l.s.detourMin.toFixed(1)})),net:+c.net.toFixed(2),status:document.getElementById('status').textContent})}"""
             print(pg.evaluate(DUMP))
-            pg.fill('#deposito','20'); pg.evaluate("()=>{const n=document.getElementById('nivel');n.value=100;n.dispatchEvent(new Event('input',{bubbles:true}))}")
+            pg.fill('#deposito','14'); pg.evaluate("()=>{const n=document.getElementById('nivel');n.value=100;n.dispatchEvent(new Event('input',{bubbles:true}))}")
             pg.evaluate("()=>document.querySelectorAll('details').forEach(d=>d.open=true)"); pg.fill('#d-repsol','8'); pg.click('#btn-go'); pg.wait_for_timeout(3500)
             print(pg.evaluate(DUMP)); pg.screenshot(path=f'{OUT}/res2-light.png', full_page=True)
-            pg.click('.dot'); pg.wait_for_timeout(300); print('popup:', pg.locator('.leaflet-popup-content').count())
+            pg.click('.dot'); pg.wait_for_timeout(300); print('popup:', pg.locator('.leaflet-popup-content').count(), 'alts:', pg.locator('.alts button').count()); pg.click('[data-alt="1"]'); pg.wait_for_timeout(3000); print('alt now', pg.evaluate('()=>state.plan.alt'))
         print(scheme,'errors:',errs)
     b.close()

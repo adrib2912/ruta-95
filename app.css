@@ -197,3 +197,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .adv + .adv { margin-top: -4px; }
 .leaflet-popup-content { font-size: 14px; line-height: 1.4; margin: 10px 12px; }
 .leaflet-popup-content a { color: #0B4EA2; font-weight: 600; }
+.alts { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.alts button { flex: 1 0 auto; min-width: 130px; text-align: left; padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); }
+.alts button[aria-pressed="true"] { border-color: var(--blue); box-shadow: inset 0 0 0 1px var(--blue); }
+.alts b { display: block; font-weight: 600; font-size: 14px; }
+.alts small { color: var(--muted); font-size: 12px; }
