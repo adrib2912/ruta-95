@@ -26,7 +26,7 @@ for n in range(1200):
 def handle(route):
     u=route.request.url
     if 'minetur' in u: return route.fulfill(json={"Fecha":"13/11/2026 14:00:00","ListaEESSPrecio":lista})
-    if '/route/v1/' in u: return route.fulfill(json={"code":"Ok","routes":[{"distance":dist*1000,"duration":dist/105*3600,"geometry":{"coordinates":coords}}]})
+    if '/route/v1/' in u: return route.fulfill(json={"code":"Ok","routes":[{"legs":[{"distance":dist*400},{"distance":dist*600}],"distance":dist*1000,"duration":dist/105*3600,"geometry":{"coordinates":coords}}]})
     if '/table/v1/' in u:
         path=u.split('/driving/')[1]; cs,q=path.split('?'); pts=[tuple(map(float,c.split(','))) for c in cs.split(';')]
         qs=dict(x.split('=') for x in q.split('&')); src=[int(x) for x in qs['sources'].split(';')]; dst=[int(x) for x in qs['destinations'].split(';')]
@@ -49,10 +49,10 @@ with sync_playwright() as p:
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e))); pg.on('console', lambda m: errs.append(m.text) if m.type=='error' and 'ERR_FAILED' not in m.text and 'Failed to load resource' not in m.text else None)
         pg.route('**/*', handle); pg.goto('http://127.0.0.1:8765/index.html')
         pg.screenshot(path=f'{OUT}/home-{scheme}.png', full_page=True)
-        pg.fill('#origen','Madrid'); pg.fill('#destino','Valencia'); pg.click('#btn-go')
+        pg.fill('#origen','Madrid'); pg.fill('#destino','Valencia'); pg.click('#btn-add'); pg.fill('#stop-0','Cuenca'); pg.click('#btn-go')
         pg.wait_for_selector('.best', timeout=20000); pg.wait_for_timeout(600)
         pg.screenshot(path=f'{OUT}/res-{scheme}.png', full_page=True)
         if scheme=='light':
-            print(pg.evaluate("""()=>{const p=state.plan,b=p.pool[0];return JSON.stringify({D:p.D,range:p.rangeKm,reach:p.reachKm,must:p.mustRefuel,ref:p.ref,refFrom:p.refFrom,near:p.near.length,pool:p.pool.length,best:{km:b.km,price:b.price,off:b.offKm,dk:b.detourKm,dm:b.detourMin,L:b.litres,cost:b.detourCost,net:b.net,be:b.breakEven,exact:b.exact},status:document.getElementById('status').textContent})}"""))
+            print(pg.evaluate("""()=>{const p=state.plan,b=p.pool[0];return JSON.stringify({D:p.D,range:p.rangeKm,reach:p.reachKm,must:p.mustRefuel,ref:p.ref,refFrom:p.refFrom,near:p.near.length,pool:p.pool.length,best:{km:b.km,price:b.price,off:b.offKm,dk:b.detourKm,dm:b.detourMin,L:b.litres,cost:b.detourCost,net:b.net,be:b.breakEven,exact:b.exact},stopKm:p.route.stopKm,link:document.querySelector('.go').href,status:document.getElementById('status').textContent})}"""))
         print(scheme,'errors:',errs)
     b.close()

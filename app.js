@@ -26,7 +26,8 @@ const fmt = (n, d = 2) => n.toLocaleString('es-ES', { minimumFractionDigits: d, 
 const eur = (n) => fmt(n, 2) + ' €';
 const nice = (s) => String(s).toLowerCase().replace(/(^|[\s\-/.(])([a-záéíóúñü])/g, (m, a, b) => a + b.toUpperCase());
 
-const state = { fuel: 'g95', origin: null, dest: null, stations: null, dataDate: '', plan: null, sort: 'score', map: null, layer: null };
+const MAX_STOPS = 5;
+const state = { fuel: 'g95', origin: null, dest: null, stops: [], stations: null, dataDate: '', plan: null, sort: 'score', map: null, layer: null };
 
 /* ---------- Geometría ---------- */
 function hav(aLat, aLon, bLat, bLon) {
@@ -209,12 +210,16 @@ async function geocode(q, limit = 5) {
   });
 }
 
-async function fetchRoute(a, b) {
-  const u = `${API.osrm}/route/v1/driving/${a.lon.toFixed(5)},${a.lat.toFixed(5)};${b.lon.toFixed(5)},${b.lat.toFixed(5)}?overview=full&geometries=geojson`;
+async function fetchRoute(points) {
+  const u = `${API.osrm}/route/v1/driving/${points.map((p) => p.lon.toFixed(5) + ',' + p.lat.toFixed(5)).join(';')}?overview=full&geometries=geojson`;
   const j = await getJSON(u, {}, 30000);
   if (j.code !== 'Ok' || !j.routes || !j.routes.length) throw new Error('No encuentro una ruta en coche entre esos dos puntos.');
   const r = j.routes[0];
-  return buildRoute(r.geometry.coordinates, r.distance / 1000, r.duration / 60);
+  const route = buildRoute(r.geometry.coordinates, r.distance / 1000, r.duration / 60);
+  // km de la ruta en el que cae cada parada intermedia
+  let acc = 0;
+  route.stopKm = (r.legs || []).slice(0, -1).map((l) => (acc += l.distance / 1000));
+  return route;
 }
 
 /* Mide el desvío real (km y minutos) de las mejores candidatas con una sola consulta a OSRM. */
@@ -275,6 +280,7 @@ function save() {
       fuel: state.fuel, consumo: $('consumo').value, deposito: $('deposito').value, nivel: $('nivel').value,
       reserva: $('reserva').value, pasillo: $('pasillo').value, tiempo: $('tiempo').value,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
+      stops: state.stops.filter((x) => x.place).map((x) => x.place),
     }));
   } catch (_) { /* sin almacenamiento */ }
 }
@@ -287,6 +293,7 @@ function restore() {
     for (const k of ['consumo', 'deposito', 'nivel', 'reserva', 'pasillo', 'tiempo']) if (d[k] != null && d[k] !== '') $(k).value = d[k];
     if (d.origin) { state.origin = d.origin; $('origen').value = d.origin.name; }
     if (d.dest) { state.dest = d.dest; $('destino').value = d.dest.name; }
+    if (Array.isArray(d.stops)) state.stops = d.stops.slice(0, MAX_STOPS).map((pl) => ({ place: pl, text: pl.name }));
   } catch (_) { /* sin almacenamiento */ }
 }
 
@@ -294,13 +301,12 @@ function renderFuels() {
   $('fuels').innerHTML = FUELS.map((f) => `<button type="button" class="chip" role="radio" aria-checked="${f.k === state.fuel}" data-k="${f.k}">${f.n}</button>`).join('');
 }
 
-function setupPlace(inputId, suggId, slot) {
-  const input = $(inputId), list = $(suggId);
+function setupPlace(input, list, onSet) {
   let timer = 0, seq = 0, items = [];
   const close = () => { list.hidden = true; list.innerHTML = ''; };
-  const pick = (it) => { state[slot] = it; input.value = it.name; close(); };
+  const pick = (it) => { onSet(it, it.name); input.value = it.name; close(); save(); };
   input.addEventListener('input', () => {
-    state[slot] = null;
+    onSet(null, input.value);
     clearTimeout(timer);
     const q = input.value.trim();
     if (q.length < 3) return close();
@@ -322,13 +328,28 @@ function setupPlace(inputId, suggId, slot) {
   input.addEventListener('blur', () => { seq++; clearTimeout(timer); setTimeout(close, 150); });
 }
 
-async function resolvePlace(slot, inputId, label) {
-  if (state[slot]) return state[slot];
-  const q = $(inputId).value.trim();
+function renderStops() {
+  const box = $('stops');
+  box.innerHTML = state.stops.map((st, i) => `<div class="field">
+      <label for="stop-${i}">Paso por</label>
+      <div class="inrow">
+        <input id="stop-${i}" type="text" placeholder="Ciudad o dirección" inputmode="search" value="${esc(st.text || '')}">
+        <button type="button" class="iconbtn" data-del="${i}" title="Quitar esta parada" aria-label="Quitar esta parada">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <ul class="sugg" id="sugg-stop-${i}" hidden></ul>
+    </div>`).join('');
+  state.stops.forEach((st, i) => setupPlace($('stop-' + i), $('sugg-stop-' + i), (pl, text) => { st.place = pl; st.text = text; }));
+  $('btn-add').hidden = state.stops.length >= MAX_STOPS;
+}
+
+async function resolvePlace(place, text, label) {
+  if (place) return place;
+  const q = (text || '').trim();
   if (!q) throw new Error(`Dime ${label}.`);
   const r = await geocode(q, 1);
   if (!r.length) throw new Error(`No encuentro "${q}". Prueba con el nombre del municipio.`);
-  state[slot] = r[0];
   return r[0];
 }
 
@@ -340,8 +361,11 @@ function status(msg, err = false) {
 
 /* ---------- Interfaz: resultados ---------- */
 const gmaps = (c) => {
-  const o = state.origin, d = state.dest;
-  return `https://www.google.com/maps/dir/?api=1&origin=${o.lat.toFixed(5)},${o.lon.toFixed(5)}&destination=${d.lat.toFixed(5)},${d.lon.toFixed(5)}&waypoints=${c.lat.toFixed(5)},${c.lon.toFixed(5)}&travelmode=driving`;
+  const o = state.origin, d = state.dest, ll = (p) => p.lat.toFixed(5) + ',' + p.lon.toFixed(5);
+  const via = state.plan.stopPlaces.map((p, i) => ({ p, km: state.plan.route.stopKm[i] || 0 }));
+  via.push({ p: c, km: c.km });
+  via.sort((x, y) => x.km - y.km);
+  return `https://www.google.com/maps/dir/?api=1&origin=${ll(o)}&destination=${ll(d)}&waypoints=${via.map((v) => ll(v.p)).join('%7C')}&travelmode=driving`;
 };
 const stName = (c) => nice(c.s[3] || 'Gasolinera');
 const stPlace = (c) => [nice(c.s[4]), nice(c.s[5] || c.s[6])].filter(Boolean).join(' · ');
@@ -463,6 +487,7 @@ function renderMap(plan, best) {
   if (best) L.marker([best.lat, best.lon], { zIndexOffset: 1000, icon: L.divIcon({ className: '', html: `<div class="pin top">${fmt(best.price, 3)} €</div>`, iconSize: [0, 0] }) }).addTo(map);
   const end = (p, t) => L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#10202E', fillOpacity: 1 }).addTo(map).bindTooltip(t);
   end(state.origin, 'Salida'); end(state.dest, 'Destino');
+  for (const p of plan.stopPlaces) L.circleMarker([p.lat, p.lon], { radius: 5, color: '#10202E', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map).bindTooltip(p.name);
   map.fitBounds(line.getBounds(), { padding: [24, 24] });
   state.map = map;
 }
@@ -473,15 +498,20 @@ async function run() {
   btn.disabled = true;
   try {
     status('Buscando los lugares…');
-    const a = await resolvePlace('origin', 'origen', 'de dónde sales');
-    const b = await resolvePlace('dest', 'destino', 'a dónde vas');
+    state.stops = state.stops.filter((x) => x.place || (x.text || '').trim());
+    const a = (state.origin = await resolvePlace(state.origin, $('origen').value, 'de dónde sales'));
+    const b = (state.dest = await resolvePlace(state.dest, $('destino').value, 'a dónde vas'));
+    for (const st of state.stops) st.place = await resolvePlace(st.place, st.text, 'la parada');
+    const stopPlaces = state.stops.map((x) => x.place);
+    renderStops();
     save();
     status('Trazando la ruta y descargando precios…');
-    const [route] = await Promise.all([fetchRoute(a, b), loadStations()]);
+    const [route] = await Promise.all([fetchRoute([a, ...stopPlaces, b]), loadStations()]);
     const car = readCar();
     const fuel = FUELS.find((f) => f.k === state.fuel);
     const near = stationsNearRoute(route, state.stations, fuel.i, car.corridor);
     const plan = makePlan(route, near, car);
+    plan.stopPlaces = stopPlaces;
     state.plan = plan;
     if (plan.pool.length) {
       status('Midiendo el desvío real de las mejores paradas…');
@@ -501,8 +531,18 @@ function init() {
   restore();
   renderFuels();
   updateGauge();
-  setupPlace('origen', 'sugg-origen', 'origin');
-  setupPlace('destino', 'sugg-destino', 'dest');
+  setupPlace($('origen'), $('sugg-origen'), (pl) => { state.origin = pl; });
+  setupPlace($('destino'), $('sugg-destino'), (pl) => { state.dest = pl; });
+  renderStops();
+  $('btn-add').addEventListener('click', () => {
+    if (state.stops.length >= MAX_STOPS) return;
+    state.stops.push({ place: null, text: '' }); renderStops(); $('stop-' + (state.stops.length - 1)).focus();
+  });
+  $('stops').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-del]');
+    if (!b) return;
+    state.stops.splice(+b.dataset.del, 1); renderStops(); save();
+  });
 
   $('fuels').addEventListener('click', (e) => {
     const b = e.target.closest('.chip');
@@ -513,6 +553,7 @@ function init() {
   $('btn-swap').addEventListener('click', () => {
     [state.origin, state.dest] = [state.dest, state.origin];
     const o = $('origen').value; $('origen').value = $('destino').value; $('destino').value = o;
+    state.stops.reverse(); renderStops(); save();
   });
   $('btn-geo').addEventListener('click', () => {
     if (!navigator.geolocation) return status('Este navegador no da la ubicación.', true);
