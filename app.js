@@ -1092,6 +1092,36 @@ function renderTank(P) {
   return `<section class="card tank"><h3>Tu depósito durante el viaje</h3>${s}</svg></section>`;
 }
 
+
+/* Insignia genérica de la gasolinera: su inicial sobre un color estable (no son los logos de las marcas). */
+const BADGE_COLORS = ['#0B4EA2', '#0B7F45', '#B4232B', '#A85F00', '#5B3FA0', '#13798A', '#3A3F45'];
+function badge(c) {
+  const name = stName(c), ch0 = (name.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]/g, '')[0] || 'G').toUpperCase();
+  let h = 0; for (const k of name) h = (h * 31 + k.charCodeAt(0)) >>> 0;
+  return `<span class="badge" style="background:${BADGE_COLORS[h % BADGE_COLORS.length]}" aria-hidden="true">${ch0}</span>`;
+}
+/* Depósito dibujado: azul lo que traes, verde lo que echas, raya roja tu límite. */
+let tankSeq = 0;
+function tankSVG(lg, car) {
+  const id = 'tk' + (++tankSeq), H = 118, top = 26, y = (l) => top + H - (l / car.tank) * H;
+  const ya = y(lg.arrive), yf = y(Math.min(car.tank, lg.arrive + lg.L)), yr = y(car.reserve);
+  return `<svg class="tankA" viewBox="0 0 120 160" role="img" aria-label="Depósito: llegas con ${fmt(lg.arrive, 0)} litros y echas ${fmt(lg.L, 0)}">
+    <defs><clipPath id="${id}"><rect x="10" y="${top}" width="100" height="${H}" rx="20"/></clipPath>
+      <pattern id="${id}s" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--good)"/><rect width="3" height="8" fill="#fff" opacity=".28"/></pattern></defs>
+    <path d="M86 ${top + 2}V12a5 5 0 0 1 5-5h12a5 5 0 0 1 5 5v8" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/>
+    <rect x="10" y="${top}" width="100" height="${H}" rx="20" fill="var(--bg)"/>
+    <g clip-path="url(#${id})">
+      <rect class="lq have" x="0" y="${ya.toFixed(1)}" width="120" height="${(top + H - ya).toFixed(1)}" fill="var(--blue)"/>
+      <rect class="lq add" x="0" y="${yf.toFixed(1)}" width="120" height="${(ya - yf).toFixed(1)}" fill="url(#${id}s)"/>
+      <path class="wave" d="M0 ${yf.toFixed(1)} q15 -5 30 0 t30 0 t30 0 t30 0 v6 h-120z" fill="var(--good)" opacity=".6"/>
+    </g>
+    <line x1="10" x2="110" y1="${yr.toFixed(1)}" y2="${yr.toFixed(1)}" stroke="var(--red)" stroke-width="2" stroke-dasharray="5 4"/>
+    <rect x="10" y="${top}" width="100" height="${H}" rx="20" fill="none" stroke="var(--ink)" stroke-width="5"/>
+    <text x="60" y="${Math.min(top + H - 8, ya + 22).toFixed(1)}" text-anchor="middle" class="tk-t">${fmt(lg.arrive, 0)} L</text>
+    ${ya - yf > 22 ? `<text x="60" y="${((ya + yf) / 2 + 6).toFixed(1)}" text-anchor="middle" class="tk-t">+${fmt(lg.L, 0)}</text>` : ''}
+  </svg>`;
+}
+
 /* Lo mismo en otros sitios: cuánto costarían esos mismos litros en las alternativas y a precio normal. */
 function renderCompare(P) {
   const ch = P.chosen, L = ch.litres, rows = [{ n: `Tu parada${ch.stops.length > 1 ? 's' : ''}`, sub: ch.stops.map((c) => 'km ' + fmt(c.km, 0)).join(' y '), cost: ch.pay, me: true }];
@@ -1152,13 +1182,36 @@ function renderResult() {
   }
   if (P.detourRelaxed) infos.push('Ninguna parada cumple tu límite de desvío, así que te propongo la mejor de las que hay.');
   if (P.closed) infos.push(`${P.closed} ${P.closed === 1 ? 'gasolinera descartada porque estará cerrada' : 'gasolineras descartadas porque estarán cerradas'} cuando pases.`);
+  const route = P.route, stops = ch.stops;
+  const big = `<section class="hero">
+      <p class="hero-r"><span>${esc(state.origin.name)} → ${esc(state.dest.name)}${route.name ? ' · ' + esc(route.name) : ''}</span><button type="button" class="linkbtn inline" data-go="2">Cambiar</button></p>
+      <p class="hero-n ${gain ? '' : 'neg'}">${gain ? '' : '−'}<span class="count" data-to="${Math.abs(ch.net).toFixed(2)}">${eur(Math.abs(ch.net))}</span></p>
+      <p class="hero-s">${gain ? 'de ahorro' : 'de sobrecoste'} si paras en el <b>${n > 1 ? 'km ' + stops.map((c) => fmt(c.km, 0)).join(' y ') : 'km ' + fmt(stops[0].km, 0)}</b></p>
+    </section>`;
+  const legsHtml = ch.legs.map((lg, i) => {
+    const c = lg.s;
+    const food = c.food && c.food.length ? `<p class="food"><b>Para comer al lado:</b> ${c.food.map((f) => `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.name + ' ' + f.lat.toFixed(5) + ',' + f.lon.toFixed(5))}" target="_blank" rel="noopener">${esc(f.name)}</a> (${fmt(f.d, 0)} m)`).join(' · ')}</p>` : '';
+    return `<section class="stopA">
+      <div class="st-head">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)} · hacia las ${hhmm(c.eta)}</p></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
+      <div class="st-body">${tankSVG(lg, car)}
+        <dl class="kv">
+          <div><dt>Llegas con</dt><dd>${fmt(lg.arrive, 0)} L</dd></div>
+          <div><dt>${lg.full ? 'Llenas' : 'Echas solo'}</dt><dd class="add">+${fmt(lg.L, 0)} L</dd></div>
+          <div><dt>Pagas</dt><dd>${eur(lg.pay)}</dd></div>
+          <div><dt>En una normal</dt><dd class="muted">${eur(lg.L * P.ref)}</dd></div>
+          <div><dt>Desvío</dt><dd>${c.detourMin < 0.5 ? 'ninguno' : approx(c) + mins(c.detourMin)}</dd></div>
+        </dl></div>
+      <p class="st-addr">${esc(nice(c.s[4]))}${c.s[8] ? ' · ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (horario sin confirmar)' : ''}</p>
+      ${food}
+    </section>`;
+  }).join('');
   $('t-plan').innerHTML = `${warns.length ? `<div class="note">${warns.map((w) => `<p>${w}</p>`).join('')}</div>` : ''}
-    <article class="card best">
-      <div class="verdict ${gain ? '' : 'zero'}"><span>${where}</span><b>${gain ? '' : '−'}<span class="count" data-to="${Math.abs(ch.net).toFixed(2)}">${eur(Math.abs(ch.net))}</span><small>${gain ? 'de ahorro' : 'de sobrecoste'}</small></b></div>
-      ${ch.legs.map((l, i) => renderStopBlock(l, i + 1, n, car)).join('<hr class="sep">')}
-      <p class="why">${why} Llegarás a ${esc(state.dest.name)} con unos ${fmt(ch.endFuel, 0)} L.</p>
-      <a class="go" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir con ${n > 1 ? 'estas paradas' : 'esta parada'} en Google Maps</a>
-      <details class="breakdown" open><summary>Cómo sale la cuenta</summary>
+    <article class="planA">
+      ${big}
+      ${legsHtml}
+      <p class="why">${why} Llegarás a ${esc(state.dest.name)} con unos <b>${fmt(ch.endFuel, 0)} L</b>.</p>
+      <a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a>
+      <details class="breakdown"><summary>Cómo sale la cuenta</summary>
         <dl class="rows">
           <div><dt>${fmt(ch.litres, 0)} L en tu parada</dt><dd>${eur(ch.pay)}</dd></div>
           <div><dt>Los mismos litros a precio normal de ${P.refKind === 'carretera' ? 'carretera' : 'la ruta'} (${fmt(P.ref, 3)} €/L)</dt><dd>${eur(ch.litres * P.ref)}</dd></div>
@@ -1438,6 +1491,7 @@ function init() {
     paintSkins(); save(); state.mapDirty = true;
   });
 
+  $('t-plan').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) { e.preventDefault(); go(+b.dataset.go); } });
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
   $('p3').addEventListener('click', async (e) => {
     const sortBtn = e.target.closest('[data-sort]');

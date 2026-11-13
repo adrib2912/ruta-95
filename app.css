@@ -413,3 +413,40 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .tank .tline { stroke-dasharray: 1400; animation: draw 1.4s .2s ease-out both; }
 }
 @keyframes draw { from { stroke-dashoffset: 1400; } }
+
+/* Resultado limpio (opción A) */
+.planA { display: flex; flex-direction: column; gap: 18px; background: var(--surface); border-radius: 22px; padding: 22px 20px 18px; }
+.hero-r { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; color: var(--muted); }
+.hero-r span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero-n { font: 700 72px/0.95 var(--f-display); color: var(--good); letter-spacing: -.01em; margin-top: 8px; font-variant-numeric: tabular-nums; }
+.hero-n.neg { color: var(--warn); }
+.hero-s { font-size: 18px; color: var(--muted); margin-top: 4px; } .hero-s b { color: var(--ink); }
+.stopA { display: flex; flex-direction: column; gap: 14px; padding-top: 18px; border-top: 1px solid var(--line); }
+.st-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.badge { width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center; color: #fff; font: 700 26px var(--f-display); box-shadow: inset 0 -4px 0 rgba(0,0,0,.18); }
+.st-id small { font: 700 12px var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.st-id h2 { font: 700 26px/1.05 var(--f-display); overflow-wrap: anywhere; }
+.st-id p { font-size: 14px; color: var(--muted); margin-top: 2px; }
+.st-p { text-align: right; } .st-p b { display: block; font: 700 30px/1 var(--f-display); font-variant-numeric: tabular-nums; } .st-p small { font-size: 12px; color: var(--muted); }
+.st-body { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 18px; align-items: center; }
+.tankA { width: 112px; height: auto; display: block; }
+.tankA .tk-t { font: 700 17px var(--f-display); fill: #fff; }
+.kv { margin: 0; display: flex; flex-direction: column; }
+.kv div { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.kv div:last-child { border-bottom: 0; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.kv dd.add { color: var(--good); } .kv dd.muted { color: var(--muted); font-weight: 600; text-decoration: line-through; }
+.st-addr { font-size: 13px; color: var(--muted); }
+.planA .food { padding: 0; }
+.planA .why { padding: 0; font-size: 15px; } .planA .why b { color: var(--ink); }
+.goA { display: flex; align-items: center; justify-content: center; min-height: 56px; border-radius: 28px; background: var(--cta-bg); color: var(--cta-ink); font-weight: 700; font-size: 17px; text-decoration: none; }
+.planA .breakdown { padding: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .tankA .lq { transform-box: fill-box; transform-origin: bottom; }
+  .tankA .have { animation: fillup .7s .25s cubic-bezier(.2, .7, .2, 1) both; }
+  .tankA .add, .tankA .wave { animation: fillup .8s 1s cubic-bezier(.2, .7, .2, 1) both; transform-box: fill-box; transform-origin: bottom; }
+  .tankA .wave { animation: fillup .8s 1s cubic-bezier(.2, .7, .2, 1) both, slosh 2.4s 1.8s ease-in-out infinite alternate; }
+  .stopA, .hero { animation: rise .4s .05s cubic-bezier(.2, .7, .2, 1) both; }
+}
+@keyframes fillup { from { transform: scaleY(0); } }
+@keyframes slosh { to { transform: translateX(-12px); } }
