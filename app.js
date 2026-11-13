@@ -574,7 +574,8 @@ function setupPlace(input, list, onSet) {
       try {
         const r = await geocode(q);
         if (my !== seq || document.activeElement !== input) return;
-        show(dedupe([...local, ...r]).slice(0, 6));
+        const have = new Set(local.map((it) => norm(it.name)));
+        show(dedupe([...local, ...r.filter((it) => !have.has(norm(it.name)))]).slice(0, 6));
       } catch (_) { /* nos quedamos con las sugerencias locales */ }
     }, 220);
   };
