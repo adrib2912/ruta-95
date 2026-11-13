@@ -285,17 +285,19 @@ function mealWindow(route, depart) {
 /* Restaurantes a menos de 450 m de cada gasolinera, de OpenStreetMap. */
 async function findFood(cands, meal) {
   if (!cands || !cands.length) return;
-  const q = `[out:json][timeout:20];(${cands.map((c) => `nwr(around:450,${c.lat.toFixed(5)},${c.lon.toFixed(5)})[amenity~"^(restaurant|fast_food)$"];`).join('')});out center tags;`;
-  let j = null;
-  for (const base of OVERPASS) {
-    try { j = await getJSON(base + '?data=' + encodeURIComponent(q), {}, 20000); if (j && j.elements) break; } catch (_) { j = null; }
-  }
-  if (!j || !j.elements) throw new Error('Sin datos de restaurantes');
-  const places = j.elements.map((e) => ({ name: e.tags && e.tags.name, type: e.tags && e.tags.amenity, lat: e.lat != null ? e.lat : e.center && e.center.lat, lon: e.lon != null ? e.lon : e.center && e.center.lon }))
+  // Consulta ligera (solo puntos, 400 m) a los tres servidores a la vez; vale la primera respuesta buena, con 12 s como máximo
+  const q = `[out:json][timeout:10];(${cands.slice(0, 15).map((c) => `node(around:400,${c.lat.toFixed(5)},${c.lon.toFixed(5)})[amenity~"^(restaurant|fast_food)$"];`).join('')});out tags;`;
+  const one = (base) => getJSON(base + '?data=' + encodeURIComponent(q), {}, 12000).then((r) => {
+    if (!r || !Array.isArray(r.elements) || /runtime error/i.test(r.remark || '')) throw new Error('mala respuesta');
+    return r;
+  });
+  const anyOk = (ps) => new Promise((res, rej) => { let n = ps.length; ps.forEach((p) => p.then(res, () => { if (--n === 0) rej(new Error('sin respuesta')); })); });
+  const j = await anyOk(OVERPASS.map(one));
+  const places = j.elements.map((e) => ({ name: e.tags && e.tags.name, type: e.tags && e.tags.amenity, lat: e.lat, lon: e.lon }))
     .filter((x) => x.name && x.lat != null);
   for (const c of cands) {
     const seen = new Set();
-    c.food = places.map((f) => ({ ...f, d: hav(c.lat, c.lon, f.lat, f.lon) * 1000 })).filter((f) => f.d <= 450 && !seen.has(f.name) && seen.add(f.name)).sort((a, b) => a.d - b.d).slice(0, 3);
+    c.food = places.map((f) => ({ ...f, d: hav(c.lat, c.lon, f.lat, f.lon) * 1000 })).filter((f) => f.d <= 400 && !seen.has(f.name) && seen.add(f.name)).sort((a, b) => a.d - b.d).slice(0, 3);
     const t = c.eta.getTime();
     c.mealOk = c.food.length > 0 && t >= meal.a - 15 * 60000 && t <= meal.b + 15 * 60000;
   }
@@ -523,6 +525,8 @@ const Q_ALL = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'comida', 'nivel'];
 const Q_NAMES = { coche: 'Tu coche', fuel: 'Combustible', nums: 'Consumo y depósito', umbral: 'Cuándo repostar', desvio: 'Desvío', comida: 'Comida', nivel: 'Depósito ahora' };
 let QS = Q_ALL.filter((q) => q !== 'comida');
 const currentMeal = () => (state.routes && state.routes[state.alt] ? mealWindow(state.routes[state.alt], readDepart()) : null);
+// Quien ya rellenó el coche empieza en lo que cambia en cada viaje: la comida (si toca) y el depósito
+const shortcutStart = () => (QS.includes('comida') ? QS.indexOf('comida') : QS.length - 1);
 const buildQS = () => { QS = Q_ALL.filter((q) => q !== 'comida' || currentMeal()); };
 const PUMP_SVG = '<svg viewBox="0 0 24 30" aria-hidden="true"><rect x="3" y="3" width="13" height="24" rx="2" fill="var(--red)"/><rect x="5.5" y="6" width="8" height="7" rx="1" fill="#fff"/><rect x="1" y="26" width="17" height="3" rx="1" fill="var(--ink)"/><path d="M16 12h2.5q2 0 2 2v8q0 1.5 1.2 1.5T23 22V11l-3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const FLAG_SVG = '<svg viewBox="0 0 20 26" aria-hidden="true"><path d="M4 2v23" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/><path d="M5 3h12l-3 4 3 4H5z" fill="var(--ink)"/></svg>';
@@ -1245,7 +1249,7 @@ function go(i) {
   status('');
   if (i === 1) renderRoutes();
   const pan = $('p' + i); pan.classList.remove('in-f', 'in-b'); void pan.offsetWidth; pan.classList.add(i >= prev ? 'in-f' : 'in-b');
-  if (i === 2) { buildQS(); paintCar(); showQ(state.carDone && !state.editing ? QS.length - 1 : Math.min(state.q || 0, QS.length - 1), i >= prev ? 1 : -1); } else stop3D();
+  if (i === 2) { buildQS(); paintCar(); showQ(state.carDone && !state.editing ? shortcutStart() : Math.min(state.q || 0, QS.length - 1), i >= prev ? 1 : -1); } else stop3D();
   window.scrollTo({ top: 0, behavior: 'auto' });
 }
 function progress(i) {
@@ -1291,8 +1295,9 @@ async function stepCompute() {
     state.plan = P;
     let measured = true;
     progress(1);
+    const food = car.eat && car.meal && P.mealCands && P.mealCands.length ? findFood(P.mealCands, car.meal).catch(() => { P.foodFailed = true; }) : null;
     if (P.short.length) { try { await refineDetours(P); } catch (_) { measured = false; } }
-    if (car.eat && car.meal && P.mealCands && P.mealCands.length) { progress(2); try { await findFood(P.mealCands, car.meal); } catch (_) { P.foodFailed = true; } }
+    if (food) { progress(2); await food; }
     progress(STEP_NAMES().length - 1);
     solve(P);
     renderResult();
@@ -1324,7 +1329,7 @@ function init() {
     else { state.maxPanel = 0; go(0); }
   });
   $('btn-back').addEventListener('click', () => {
-    if (state.panel === 2 && state.q > 0 && !(state.carDone && !state.editing)) return showQ(state.q - 1, -1);
+    if (state.panel === 2 && state.q > (state.carDone && !state.editing ? shortcutStart() : 0)) return showQ(state.q - 1, -1);
     go(Math.max(0, state.panel - 1));
   });
   $('wiz').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b && !b.disabled) go(+b.dataset.go); });

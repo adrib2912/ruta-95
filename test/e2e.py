@@ -86,6 +86,10 @@ with sync_playwright() as p:
             for t in ['precios','mapa','otras']:
                 pg.click(f'[data-tab="{t}"]'); pg.wait_for_timeout(500); pg.screenshot(path=f'{OUT}/w4-{t}.png')
             pg.click('[data-show]'); pg.wait_for_timeout(400); print('popup', pg.locator('.leaflet-popup-content').count())
-            pg.screenshot(path=f'{OUT}/res-full.png', full_page=True); pg.click('#btn-back'); pg.wait_for_timeout(300); print('atajo q', pg.evaluate('()=>state.q')); pg.click('#btn-back'); pg.click('[data-alt="1"]'); pg.click('#btn-next'); pg.wait_for_timeout(300); pg.click('#btn-next'); pg.wait_for_selector('.best'); pg.wait_for_timeout(1500); print(pg.evaluate(DUMP))
+            pg.screenshot(path=f'{OUT}/res-full.png', full_page=True); pg.click('#btn-back'); pg.wait_for_timeout(300); print('atajo q', pg.evaluate('()=>state.q')); pg.click('#btn-back'); pg.click('[data-alt="1"]'); pg.click('#btn-next'); pg.wait_for_timeout(400); print('atajo empieza en', pg.evaluate('()=>QS[state.q]'))
+            for _ in range(4):
+                if pg.locator('#btn-next').inner_text().strip().lower() in ('nueva búsqueda','calculando…'): break
+                pg.click('#btn-next'); pg.wait_for_timeout(500)
+            pg.wait_for_selector('.best'); pg.wait_for_timeout(1500); print(pg.evaluate(DUMP))
         print(scheme,'errors:',errs)
     b.close()
