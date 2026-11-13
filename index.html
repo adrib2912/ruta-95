@@ -14,30 +14,33 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script>try{var k=JSON.parse(localStorage.getItem("ruta95")||"{}").skin;if(k)document.documentElement.dataset.skin=k}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=6">
+<link rel="stylesheet" href="app.css?v=7">
 </head>
 <body>
 <main class="wrap">
 
   <header class="top">
-    <svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><rect x="1.5" y="1.5" width="41" height="41" rx="10" fill="var(--sign)"/><rect x="5" y="5" width="34" height="34" rx="7" fill="none" stroke="#fff" stroke-width="1.6"/><text x="22" y="29.5" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif" font-weight="700" font-size="21" fill="#fff">95</text></svg>
+    <svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><rect x="1.5" y="1.5" width="41" height="41" rx="10" fill="var(--sign)"/><rect x="5" y="5" width="34" height="34" rx="7" fill="none" stroke="var(--sign-line)" stroke-width="1.6"/><text x="22" y="29.5" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif" font-weight="700" font-size="21" fill="#fff">95</text></svg>
     <div>
       <h1>Ruta 95</h1>
       <p>Dónde repostar en tu ruta</p>
     </div>
   </header>
 
-  <div class="summary" id="summary" hidden>
-    <div><b id="sum-route"></b><span id="sum-car"></span></div>
-    <button type="button" id="btn-edit">Cambiar</button>
-  </div>
+  <ol class="wiz" id="wiz" aria-label="Pasos">
+    <li><button type="button" data-go="0"><i>1</i>Ruta</button></li>
+    <li><button type="button" data-go="1"><i>2</i>Camino</button></li>
+    <li><button type="button" data-go="2"><i>3</i>Coche</button></li>
+    <li><button type="button" data-go="3"><i>4</i>Parada</button></li>
+  </ol>
 
-  <form id="form" autocomplete="off">
-    <section class="sign" aria-label="Ruta">
+  <!-- Panel 1: Ruta -->
+  <section class="panel" id="p0" aria-label="Ruta">
+    <div class="sign">
       <div class="field">
         <label for="origen">Salgo de</label>
         <div class="inrow">
-          <input id="origen" type="text" placeholder="Madrid" inputmode="search" enterkeyhint="next">
+          <input id="origen" type="text" placeholder="Madrid" inputmode="search" enterkeyhint="next" autocomplete="off">
           <button type="button" id="btn-geo" class="iconbtn" title="Usar mi ubicación" aria-label="Usar mi ubicación">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="3.5" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
           </button>
@@ -48,7 +51,7 @@
       <div class="field">
         <label for="destino">Voy a</label>
         <div class="inrow">
-          <input id="destino" type="text" placeholder="Valencia" inputmode="search" enterkeyhint="go">
+          <input id="destino" type="text" placeholder="Valencia" inputmode="search" enterkeyhint="go" autocomplete="off">
           <button type="button" id="btn-swap" class="iconbtn" title="Invertir la ruta" aria-label="Invertir la ruta">
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 4v14m0 0-4-4m4 4 4-4M17 20V6m0 0-4 4m4-4 4 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
@@ -63,11 +66,38 @@
         <label for="salida">Día y hora de salida</label>
         <div class="inrow"><input id="salida" type="datetime-local"><button type="button" id="btn-now" class="iconbtn">Ahora</button></div>
       </div>
+    </div>
+    <label class="check"><input type="checkbox" id="peajes"> Evitar peajes</label>
+    <section class="card how">
+      <h2>Cómo funciona</h2>
+      <ol>
+        <li>Dime de dónde a dónde vas y elige el camino en el mapa.</li>
+        <li>Cuéntame cómo es tu coche y cuánto llevas en el depósito.</li>
+        <li>Te digo en qué kilómetro parar, cuánto ahorras y cuánto te desvías.</li>
+      </ol>
     </section>
+  </section>
 
-    <section class="card car" aria-label="Tu coche">
+  <!-- Panel 2: Camino -->
+  <section class="panel" id="p1" aria-label="Camino" hidden>
+    <h2 class="ptitle">¿Por dónde vas?</h2>
+    <div id="rmap" class="map"></div>
+    <div class="alts" id="alts" role="radiogroup" aria-label="Rutas posibles"></div>
+    <p class="hint">Toca una ruta en el mapa o en la lista. Los peajes salen del mapa de OpenStreetMap: indican el tramo, no el precio.</p>
+  </section>
+
+  <!-- Panel 3: Coche -->
+  <section class="panel" id="p2" aria-label="Coche" hidden>
+    <div class="card stage">
+      <div class="road moving"><span class="veh" id="car-prev"></span><span class="pump" style="right:14px"></span></div>
+      <div class="pickrow">
+        <div class="chips" id="car-types" role="radiogroup" aria-label="Tamaño del coche"></div>
+        <div class="swatches" id="car-colors" role="radiogroup" aria-label="Color del coche"></div>
+      </div>
+    </div>
+
+    <div class="card car">
       <div class="chips" id="fuels" role="radiogroup" aria-label="Combustible"></div>
-
       <div class="grid2">
         <div class="numfield">
           <label for="consumo">Consumo</label>
@@ -78,67 +108,76 @@
           <div class="unit"><input id="deposito" type="number" inputmode="numeric" step="1" min="10" max="150" value="45"><span>L</span></div>
         </div>
       </div>
-
       <div class="gauge">
-        <div class="gauge-head">
-          <label for="nivel">Depósito al salir</label>
-          <output id="nivel-out" for="nivel"></output>
-        </div>
+        <div class="gauge-head"><label for="nivel">Depósito al salir</label><output id="nivel-out" for="nivel"></output></div>
         <input id="nivel" type="range" min="5" max="100" step="5" value="50">
         <div class="gauge-ticks" aria-hidden="true"><span>R</span><span>¼</span><span>½</span><span>¾</span><span>Lleno</span></div>
+      </div>
+      <div>
+        <p class="qlabel">Quiero repostar antes de bajar de</p>
+        <div class="chips" id="umbral" role="radiogroup" aria-label="Cuándo repostar"></div>
+        <p class="hint" id="umbral-out"></p>
+        <label class="check"><input type="checkbox" id="temprano"> Prefiero no parar en la primera hora</label>
       </div>
 
       <details class="adv">
         <summary>Ajustes finos</summary>
         <div class="rows-set">
-          <div class="numfield"><label for="reserva">No bajar de</label><div class="unit"><input id="reserva" type="number" inputmode="numeric" step="1" min="0" max="30" value="6"><span>L</span></div></div>
           <div class="numfield"><label for="pasillo">Buscar hasta</label><div class="unit"><input id="pasillo" type="number" inputmode="numeric" step="1" min="1" max="10" value="4"><span>km de la ruta</span></div></div>
           <div class="numfield"><label for="tiempo">Mi tiempo vale</label><div class="unit"><input id="tiempo" type="number" inputmode="numeric" step="1" min="0" max="60" value="6"><span>€/h</span></div></div>
           <div class="numfield"><label for="margen">En carretera gasto</label><div class="unit"><input id="margen" type="number" inputmode="numeric" step="5" min="0" max="50" value="10"><span>% más</span></div></div>
         </div>
         <p class="hint">El valor del tiempo solo ordena las paradas. El margen de carretera hace más prudente la autonomía; no cambia los euros.</p>
       </details>
-
       <details class="adv">
         <summary>Mis descuentos</summary>
         <div class="rows-set" id="discounts"></div>
         <p class="hint">Céntimos por litro que te descuenta cada marca con su tarjeta o app.</p>
       </details>
-    </section>
+      <div class="skins" id="skins" role="group" aria-label="Aspecto">Aspecto
+        <button type="button" data-skin-btn="">Señal</button>
+        <button type="button" data-skin-btn="asfalto">Asfalto</button>
+        <button type="button" data-skin-btn="ticket">Ticket</button>
+      </div>
+    </div>
+  </section>
 
-    <button type="submit" class="cta" id="btn-go">Buscar mi parada</button>
-  </form>
-
-  <div id="progress">
-    <ol class="steps" id="steps" hidden></ol>
-    <p class="status" id="status" role="status" aria-live="polite"></p>
-  </div>
-
-  <section id="results" hidden></section>
-
-  <section class="card how" id="intro">
-    <h2>Cómo decide</h2>
-    <ol>
-      <li><b>Traza tu ruta</b> y calcula hasta qué kilómetro llegas con lo que llevas en el depósito.</li>
-      <li><b>Mira las gasolineras de ese tramo</b> que estarán abiertas cuando pases, las de pie de carretera y las que quedan a pocos kilómetros de una salida.</li>
-      <li><b>Mide el desvío real</b> de cada una, en kilómetros y minutos, y lo resta al ahorro.</li>
-      <li><b>Compara con el precio normal de las gasolineras de carretera</b>, que es donde acabarías parando sin planificar. No con la más cara de la zona.</li>
-      <li><b>Si con un repostaje no llegas, lo reparte en dos</b>: lo justo en la cara y depósito lleno en la barata.</li>
-    </ol>
+  <!-- Panel 4: Parada -->
+  <section class="panel" id="p3" aria-label="Parada" hidden>
+    <div id="loading" class="card stage" hidden>
+      <div class="road moving"><span class="veh" id="car-load"></span></div>
+      <ol class="steps" id="steps"></ol>
+    </div>
+    <div id="result" hidden>
+      <div id="strip"></div>
+      <div class="tabs" id="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="plan" aria-selected="true">Plan</button>
+        <button type="button" role="tab" data-tab="precios" aria-selected="false">Precios</button>
+        <button type="button" role="tab" data-tab="mapa" aria-selected="false">Mapa</button>
+        <button type="button" role="tab" data-tab="otras" aria-selected="false">Otras</button>
+      </div>
+      <div class="tab" id="t-plan"></div>
+      <div class="tab" id="t-precios" hidden></div>
+      <div class="tab" id="t-mapa" hidden><div id="map" class="map"></div><p class="hint">Toca una gasolinera para ver su precio y abrir la ruta con esa parada.</p></div>
+      <div class="tab" id="t-otras" hidden></div>
+    </div>
   </section>
 
   <footer class="foot">
-    <div class="skins" id="skins" role="group" aria-label="Aspecto">Aspecto
-      <button type="button" data-skin-btn="">Señal</button>
-      <button type="button" data-skin-btn="asfalto">Asfalto</button>
-      <button type="button" data-skin-btn="ticket">Ticket</button>
-    </div>
     <p id="data-date"></p>
-    <p>Precios: Geoportal de Gasolineras, Ministerio para la Transición Ecológica. Rutas: OSRM y OpenStreetMap. Los precios pueden cambiar durante el día y no incluyen descuentos de tarjetas.</p>
+    <p>Precios: Geoportal de Gasolineras, Ministerio para la Transición Ecológica. Rutas y mapas: OSRM y OpenStreetMap. Los precios pueden cambiar durante el día.</p>
   </footer>
 </main>
 
+<nav class="bar" aria-label="Navegación">
+  <p class="status" id="status" role="status" aria-live="polite"></p>
+  <div class="bar-in">
+    <button type="button" class="back" id="btn-back" hidden>Atrás</button>
+    <button type="button" class="cta" id="btn-next">Ver el camino</button>
+  </div>
+</nav>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

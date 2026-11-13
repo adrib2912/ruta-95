@@ -55,17 +55,17 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--ink); font: 400 16px/1.45 var(--f-body); -webkit-text-size-adjust: 100%; }
-.wrap { max-width: 560px; margin: 0 auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 14px; }
+.wrap { max-width: 600px; margin: 0 auto; padding: 16px 16px 120px; display: flex; flex-direction: column; gap: 14px; }
 form { display: flex; flex-direction: column; gap: 14px; }
 [hidden] { display: none !important; }
 h1, h2, h3, p { margin: 0; }
 button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 
-.top { display: flex; align-items: center; gap: 12px; padding: 4px 2px 12px; border-bottom: 3px dashed var(--line); }
-.logo { width: 44px; height: 44px; flex: none; }
-.top h1 { font: 700 34px/1 var(--f-display); letter-spacing: .01em; text-transform: uppercase; }
-.top p { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.top { display: flex; align-items: center; gap: 12px; padding: 2px; }
+.logo { width: 38px; height: 38px; flex: none; }
+.top h1 { font: 700 28px/1 var(--f-display); letter-spacing: .01em; text-transform: uppercase; }
+.top p { color: var(--muted); font-size: 13px; margin-top: 1px; }
 
 /* Señal de autovía */
 .sign { position: relative; background: var(--sign); color: var(--sign-ink); border-radius: 20px; padding: 20px 18px; display: flex; flex-direction: column; gap: 12px;
@@ -229,12 +229,73 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .skins button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
 @media (prefers-reduced-motion: no-preference) { .cta:active, .go:active { transform: translateY(1px); } }
 
-/* Escritorio: resultado a la izquierda, gráfico y mapa fijos a la derecha */
-@media (min-width: 1000px) {
-  .wrap { max-width: 1120px; }
-  .wrap > .top, .wrap > form, .wrap > .summary, .wrap > #progress, .wrap > .how, .wrap > .foot { width: 100%; max-width: 560px; }
-  #results { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "main side" "list side"; align-items: start; gap: 14px 24px; }
-  .res-main { grid-area: main; } .res-list { grid-area: list; }
-  .res-side { grid-area: side; position: sticky; top: 16px; }
-  #map { height: 460px; }
+
+/* Pasos y paneles */
+.wiz { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.wiz button { width: 100%; min-height: 40px; white-space: nowrap; background: transparent; border: 0; border-top: 4px solid var(--line); padding: 6px 0 0; font: 700 14px var(--f-display); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); text-align: left; }
+.wiz button.done { border-color: var(--ink); color: var(--ink); }
+.wiz button[aria-current="step"] { border-color: var(--red); color: var(--ink); }
+.wiz button:disabled { cursor: default; opacity: .7; }
+.panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ptitle { font: 700 24px/1.1 var(--f-display); }
+.check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; padding: 0 2px; }
+.check input { width: 22px; height: 22px; accent-color: var(--blue); }
+.qlabel { font-size: 13px; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
+.map { height: min(46vh, 380px); border-radius: 12px; overflow: hidden; background: var(--line); z-index: 0; }
+#map { height: min(58vh, 460px); }
+.alts { display: flex; flex-direction: column; gap: 8px; }
+.alts button { flex: none; min-height: 56px; text-align: left; padding: 10px 14px; border: 1.5px solid var(--line); border-radius: 12px; background: var(--surface); display: grid; grid-template-columns: auto 1fr; gap: 0 12px; align-items: baseline; }
+.alts button[aria-checked="true"] { border-color: var(--blue); box-shadow: inset 0 0 0 1.5px var(--blue); }
+.alts b { font: 700 19px var(--f-display); letter-spacing: .02em; grid-row: span 2; align-self: center; }
+.alts small { color: var(--muted); font-size: 13px; display: block; }
+.alts small.toll { color: var(--warn); font-weight: 600; }
+
+/* Barra inferior fija */
+.bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; background: var(--bg); border-top: 1px solid var(--line); padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
+.bar-in { max-width: 568px; margin: 0 auto; display: flex; gap: 10px; }
+.bar .status { max-width: 568px; margin: 0 auto 8px; text-align: left; }
+.bar .cta { flex: 1; height: 54px; }
+.back { flex: none; height: 54px; padding: 0 18px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 700; }
+
+/* Coche, carretera y surtidor */
+.stage { display: flex; flex-direction: column; gap: 14px; }
+.road { position: relative; height: 74px; border-radius: 12px; background: #3A4048; overflow: hidden; }
+.road::after { content: ""; position: absolute; left: 0; right: 0; bottom: 12px; height: 3px; background: repeating-linear-gradient(90deg, #F2F2F2 0 22px, transparent 22px 44px); opacity: .85; }
+.road.moving::after { width: 200%; }
+@media (prefers-reduced-motion: no-preference) {
+  .road.moving::after { animation: lane .7s linear infinite; }
+  .road.moving .veh { animation: bob .5s ease-in-out infinite alternate; }
+  .veh.drive { animation: drive 1.5s cubic-bezier(.2, .7, .2, 1) both; }
 }
+@keyframes lane { to { transform: translateX(-44px); } }
+@keyframes bob { to { transform: translateY(-1.5px); } }
+@keyframes drive { from { left: 0; } }
+.veh { position: absolute; bottom: 9px; left: 22px; width: 92px; z-index: 2; }
+.veh svg { display: block; width: 100%; height: auto; }
+.pump { position: absolute; bottom: 12px; width: 26px; z-index: 1; }
+.pump svg, .flag svg { display: block; width: 100%; height: auto; }
+.pickrow { display: flex; flex-direction: column; gap: 12px; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatches button { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--line); padding: 0; }
+.swatches button[aria-checked="true"] { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5.5px var(--ink); }
+/* Tira del viaje: el coche avanza hasta el surtidor */
+.strip { padding: 12px; }
+.strip .road { height: 66px; }
+.track { position: absolute; left: 98px; right: 26px; top: 0; bottom: 0; }
+.track .reach { position: absolute; left: -98px; bottom: 0; height: 6px; background: var(--good); border-radius: 0 3px 3px 0; margin-right: 0; padding-left: 98px; box-sizing: content-box; max-width: 100%; }
+.track .veh { left: var(--to); bottom: 9px; width: 84px; transform: translateX(-100%); }
+.track .pump { transform: translateX(-10%); }
+.track .flag { position: absolute; left: 100%; bottom: 12px; width: 18px; }
+.strip-l { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.strip-l span:nth-child(2) { font: 700 15px var(--f-display); color: var(--ink); letter-spacing: .04em; text-transform: uppercase; }
+.strip-l span:first-child, .strip-l span:last-child { max-width: 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Pestañas del resultado */
+#result { display: flex; flex-direction: column; gap: 14px; }
+.tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--line); border-radius: 12px; padding: 4px; }
+.tabs button { height: 40px; border: 0; border-radius: 9px; background: transparent; font-weight: 700; font-size: 14px; }
+.tabs button[aria-selected="true"] { background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+.tab { display: flex; flex-direction: column; gap: 14px; }
+#loading .steps { margin-top: 2px; }
+.skins { padding-top: 4px; }
+.wiz i { font-style: normal; opacity: .6; margin-right: 5px; }

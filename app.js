@@ -39,7 +39,11 @@ const fmt = (n, d = 2) => n.toLocaleString('es-ES', { minimumFractionDigits: d, 
 const eur = (n) => fmt(n, 2) + ' €';
 const nice = (s) => String(s).toLowerCase().replace(/(^|[\s\-/.(])([a-záéíóúñü])/g, (m, a, b) => a + b.toUpperCase());
 
-const state = { fuel: 'g95', origin: null, dest: null, stops: [], discounts: {}, stations: null, dataNote: '', plan: null, sort: 'score', map: null, markers: new Map() };
+const norm = (s) => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+const state = { fuel: 'g95', origin: null, dest: null, stops: [], stopPlaces: [], discounts: {}, stations: null, places: null, recents: [],
+  routes: null, alt: 0, plan: null, sort: 'score', map: null, rmap: null, mapDirty: true, markers: new Map(),
+  car: { type: 'm', color: '#1F5FBF' }, frac: 0.12, panel: 0, maxPanel: 0, stationsP: null };
 
 /* ---------- Geometría ---------- */
 function hav(aLat, aLon, bLat, bLon) {
@@ -237,7 +241,11 @@ function preparePlan(route, near, car) {
   let first = cands.filter((c) => c.km + c.offKm <= reachKm + 0.01);
   P.outOfReach = mustRefuel && first.length === 0;
   if (P.outOfReach) first = [...cands].sort((a, b) => a.km - b.km).slice(0, 6);
-  P.first = first.sort((a, b) => est(b) - est(a)).slice(0, SHORTLIST);
+  first.sort((a, b) => est(b) - est(a));
+  for (const c of first) c.early = c.km / D * route.durMin < 60;
+  const late = first.filter((c) => !c.early);
+  // Si prefiere no parar en la primera hora, se priorizan las posteriores y se guardan unas pocas tempranas para comparar
+  P.first = car.noEarly && late.length && !P.outOfReach ? [...late.slice(0, SHORTLIST - 6), ...first.filter((c) => c.early).slice(0, 6)] : first.slice(0, SHORTLIST);
   const inFirst = new Set(P.first);
   P.later = !mustRefuel ? [] : cands
     .filter((c) => !inFirst.has(c) && c.km > reachKm && c.km <= rangeKm + fullRangeKm)
@@ -268,6 +276,11 @@ function solve(P) {
     P.incomplete = true;
   }
   singles.sort((x, y) => y.score - x.score);
+  P.earlyBest = null;
+  if (P.car.noEarly && singles.some((pl) => !pl.stops[0].early)) {
+    P.earlyBest = singles.find((pl) => pl.stops[0].early) || null;
+    singles = singles.filter((pl) => !pl.stops[0].early);
+  }
   pairs.sort((x, y) => y.score - x.score);
   const s1 = singles[0], p2 = pairs[0];
   P.singles = singles;
@@ -326,11 +339,32 @@ async function loadStations() {
   }
   if (!snap || !snap.e || !snap.e.length) throw new Error('No he podido descargar los precios del Ministerio. Prueba otra vez en un minuto.');
   state.stations = snap.e;
+  // Municipios con gasolinera: sirven para predecir al escribir sin esperar al buscador en línea
+  const idx = new Map();
+  for (const st of snap.e) {
+    let name = st[6] || nice(st[5] || '');
+    if (!name) continue;
+    const m = name.match(/^(.*)\s\((.+)\)$/);
+    if (m) name = m[2] + ' ' + m[1];
+    const key = norm(name) + '|' + st[7];
+    let e = idx.get(key);
+    if (!e) idx.set(key, (e = { name, sub: nice(st[7] || ''), lats: [], lons: [] }));
+    e.lats.push(st[1]); e.lons.push(st[2]);
+  }
+  state.places = [...idx.values()].map((e) => ({ name: e.name, sub: e.sub, lat: median(e.lats), lon: median(e.lons), n: e.lats.length, k: norm(e.name) }));
   const src = snap.live ? 'descargados ahora del Ministerio' : ageH < 1 ? 'copia de hace menos de 1 h' : `copia de hace ${fmt(ageH, 0)} h`;
   $('data-date').textContent = `Precios del ${snap.fecha} (${src}) · ${fmt(snap.e.length, 0)} estaciones`;
 }
 
+const geoCache = new Map();
 async function geocode(q, limit = 5) {
+  const ck = norm(q) + '|' + limit;
+  if (geoCache.has(ck)) return geoCache.get(ck);
+  const r = await geocodeRemote(q, limit);
+  if (r.length) geoCache.set(ck, r);
+  return r;
+}
+async function geocodeRemote(q, limit) {
   try {
     const u = API.photon + '?q=' + encodeURIComponent(q) + '&limit=' + limit + '&lat=40.2&lon=-3.7&bbox=-18.5,27.4,4.7,44';
     const j = await getJSON(u, {}, 10000);
@@ -349,10 +383,12 @@ async function geocode(q, limit = 5) {
   });
 }
 
-async function fetchRoute(points) {
+async function fetchRoute(points, avoidTolls = false) {
   let j;
+  const q = (ex) => `/route/v1/driving/${points.map((p) => p.lon.toFixed(5) + ',' + p.lat.toFixed(5)).join(';')}?overview=full&geometries=geojson&steps=true${points.length === 2 ? '&alternatives=3' : ''}${ex ? '&exclude=toll' : ''}`;
   try {
-    j = await osrm(`/route/v1/driving/${points.map((p) => p.lon.toFixed(5) + ',' + p.lat.toFixed(5)).join(';')}?overview=full&geometries=geojson&steps=true${points.length === 2 ? '&alternatives=3' : ''}`);
+    if (avoidTolls) { try { j = await osrm(q(true)); } catch (_) { j = null; } }
+    if (!j) j = await osrm(q(false));
   } catch (e) {
     throw new Error(e && e.message === 'NoRoute' ? 'No encuentro una ruta en coche entre esos puntos.' : 'El servicio de rutas no responde. Prueba otra vez en un momento.');
   }
@@ -366,6 +402,16 @@ async function fetchRoute(points) {
       if (/^[A-Z]{1,3}-?\d+/.test(t)) refs.set(t, (refs.get(t) || 0) + st.distance);
     }
     const main = [...refs].filter(([, d]) => d > r.distance * 0.08).sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
+    route.tollKm = 0;
+    const tolls = new Set();
+    for (const l of r.legs || []) for (const st of l.steps || []) {
+      if ((st.intersections || []).some((x) => (x.classes || []).includes('toll'))) {
+        route.tollKm += st.distance / 1000;
+        const t = String(st.ref || '').split(';')[0].trim();
+        if (t) tolls.add(t);
+      }
+    }
+    route.tollRefs = [...tolls].slice(0, 3);
     route.name = main.length ? [...refs.keys()].filter((k) => main.includes(k)).join(' · ')
       : [...new Set((r.legs || []).flatMap((l) => String(l.summary || '').split(',').map((t) => t.trim()).filter(Boolean)))].slice(0, 2).join(', ');
     return route;
@@ -402,7 +448,27 @@ async function refineDetours(P) {
   }
 }
 
-/* ---------- Interfaz: formulario ---------- */
+/* ---------- Interfaz: coche y ajustes ---------- */
+const CAR_TYPES = [
+  { k: 's', n: 'Pequeño', d: 'M6 38v-9q0-4 5-5l14-3 12-11q3-3 8-3h22q5 0 8 4l9 12 12 3q5 1 5 6v7z', w: 'M34 20l10-9q2-2 5-2h8v11zM61 9h11q3 0 5 3l6 8H61z' },
+  { k: 'm', n: 'Mediano', d: 'M4 38v-8q0-4 5-5l18-3 14-9q4-3 9-3h20q5 0 9 3l13 9 16 3q6 1 6 6v7z', w: 'M36 21l10-7q3-2 6-2h6v9zM62 12h8q3 0 6 2l10 7H62z' },
+  { k: 'l', n: 'Grande', d: 'M4 38V24q0-4 4-5l8-2 7-10q2-3 7-3h46q5 0 7 4l6 11 14 3q6 1 6 6v10z', w: 'M26 18l5-8q1-2 4-2h18v10zM57 8h18q3 0 4 2l5 8H57z' },
+];
+const CAR_COLORS = ['#F2F2F2', '#22262B', '#8A9199', '#D5202A', '#1F5FBF', '#2E7D4F', '#F2B705'];
+const THRESHOLDS = [{ f: 0.12, n: 'Reserva' }, { f: 0.25, n: '¼' }, { f: 1 / 3, n: '⅓' }, { f: 0.5, n: '½' }];
+const PUMP_SVG = '<svg viewBox="0 0 24 30" aria-hidden="true"><rect x="3" y="3" width="13" height="24" rx="2" fill="var(--red)"/><rect x="5.5" y="6" width="8" height="7" rx="1" fill="#fff"/><rect x="1" y="26" width="17" height="3" rx="1" fill="var(--ink)"/><path d="M16 12h2.5q2 0 2 2v8q0 1.5 1.2 1.5T23 22V11l-3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const FLAG_SVG = '<svg viewBox="0 0 20 26" aria-hidden="true"><path d="M4 2v23" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/><path d="M5 3h12l-3 4 3 4H5z" fill="var(--ink)"/></svg>';
+function carSVG() {
+  const t = CAR_TYPES.find((c) => c.k === state.car.type) || CAR_TYPES[1];
+  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="${t.d}" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="${t.w}" fill="#CFE3F5" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="round"/><circle cx="30" cy="38" r="8.5" fill="var(--ink)"/><circle cx="30" cy="38" r="3.5" fill="#C9CED4"/><circle cx="92" cy="38" r="8.5" fill="var(--ink)"/><circle cx="92" cy="38" r="3.5" fill="#C9CED4"/></svg>`;
+}
+function paintCar() {
+  document.querySelectorAll('.veh').forEach((el) => { el.innerHTML = carSVG(); });
+  document.querySelectorAll('.pump:empty').forEach((el) => { el.innerHTML = PUMP_SVG; });
+  $('car-types').innerHTML = CAR_TYPES.map((t) => `<button type="button" class="chip" role="radio" aria-checked="${t.k === state.car.type}" data-type="${t.k}">${t.n}</button>`).join('');
+  $('car-colors').innerHTML = CAR_COLORS.map((c) => `<button type="button" role="radio" aria-checked="${c === state.car.color}" aria-label="Color ${c}" data-color="${c}" style="background:${c}"></button>`).join('');
+}
+
 function readCar() {
   const v = (id, def) => { const n = parseFloat(String($(id).value).replace(',', '.')); return Number.isFinite(n) ? n : def; };
   const tank = Math.max(5, v('deposito', 45));
@@ -410,36 +476,39 @@ function readCar() {
   return {
     cons, tank, consSafe: cons * (1 + Math.min(50, Math.max(0, v('margen', 10))) / 100),
     fuelNow: tank * v('nivel', 50) / 100,
-    reserve: Math.min(tank * 0.8, Math.max(0, v('reserva', 6))),
+    reserve: tank * state.frac,
     corridor: Math.min(10, Math.max(1, v('pasillo', 4))),
     timeValue: Math.max(0, v('tiempo', 6)),
+    noEarly: $('temprano').checked,
   };
 }
-
 function readDepart() {
   const v = $('salida').value;
   const d = v ? new Date(v) : new Date();
   return Number.isNaN(d.getTime()) ? new Date() : d;
 }
-
 function updateGauge() {
   const car = readCar();
   const km = Math.max(0, (car.fuelNow - car.reserve) / car.consSafe * 100);
-  $('nivel-out').textContent = `${fmt(car.fuelNow, 0)} L · unos ${fmt(km, 0)} km`;
+  $('nivel-out').textContent = `${fmt(car.fuelNow, 0)} L`;
+  $('umbral').innerHTML = THRESHOLDS.map((t) => `<button type="button" class="chip" role="radio" aria-checked="${Math.abs(t.f - state.frac) < 0.01}" data-f="${t.f}">${t.n}</button>`).join('');
+  $('umbral-out').textContent = car.fuelNow <= car.reserve
+    ? `Ya estás por debajo de ${fmt(car.reserve, 0)} L: te buscaré la primera gasolinera que encuentres.`
+    : `Buscaré parada antes de que bajes de ${fmt(car.reserve, 0)} L. Con lo que llevas, eso son unos ${fmt(km, 0)} km.`;
 }
 
-const FIELDS = ['consumo', 'deposito', 'nivel', 'reserva', 'pasillo', 'tiempo', 'margen'];
+const FIELDS = ['consumo', 'deposito', 'nivel', 'pasillo', 'tiempo', 'margen'];
 function save() {
   try {
     localStorage.setItem('ruta95', JSON.stringify({
       fuel: state.fuel, ...Object.fromEntries(FIELDS.map((k) => [k, $(k).value])),
       discounts: state.discounts, skin: document.documentElement.dataset.skin || '',
+      car: state.car, frac: state.frac, avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, recents: state.recents,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
       stops: state.stops.filter((x) => x.place).map((x) => x.place),
     }));
   } catch (_) { /* sin almacenamiento */ }
 }
-
 function restore() {
   try {
     const d = JSON.parse(localStorage.getItem('ruta95') || 'null');
@@ -447,54 +516,82 @@ function restore() {
     if (FUELS.some((f) => f.k === d.fuel)) state.fuel = d.fuel;
     for (const k of FIELDS) if (d[k] != null && d[k] !== '') $(k).value = d[k];
     if (d.discounts && typeof d.discounts === 'object') state.discounts = d.discounts;
+    if (d.car && CAR_TYPES.some((t) => t.k === d.car.type) && CAR_COLORS.includes(d.car.color)) state.car = d.car;
+    if (THRESHOLDS.some((t) => Math.abs(t.f - d.frac) < 0.01)) state.frac = d.frac;
+    $('peajes').checked = !!d.avoidTolls; $('temprano').checked = !!d.noEarly;
+    if (Array.isArray(d.recents)) state.recents = d.recents.slice(0, 5);
     if (d.origin) { state.origin = d.origin; $('origen').value = d.origin.name; }
     if (d.dest) { state.dest = d.dest; $('destino').value = d.dest.name; }
     if (Array.isArray(d.stops)) state.stops = d.stops.slice(0, MAX_STOPS).map((pl) => ({ place: pl, text: pl.name }));
   } catch (_) { /* sin almacenamiento */ }
 }
-
 function renderFuels() {
   $('fuels').innerHTML = FUELS.map((f) => `<button type="button" class="chip" role="radio" aria-checked="${f.k === state.fuel}" data-k="${f.k}">${f.n}</button>`).join('');
 }
-
 function renderDiscounts() {
   $('discounts').innerHTML = BRANDS.map((b) => `<div class="numfield"><label for="d-${b.k}">${b.n}</label>
     <div class="unit"><input id="d-${b.k}" data-brand="${b.k}" type="number" inputmode="decimal" step="1" min="0" max="50" value="${state.discounts[b.k] || ''}" placeholder="0"><span>cts/L</span></div></div>`).join('');
 }
 
+/* ---------- Interfaz: buscador de lugares ---------- */
+/* Tres fuentes, de más rápida a más lenta: tus lugares recientes, los municipios con gasolinera
+   (ya en memoria, respuesta instantánea) y el buscador en línea para direcciones. */
+function localSuggest(q) {
+  const k = norm(q);
+  if (k.length < 2 || !state.places) return [];
+  const a = [], b = [];
+  for (const p of state.places) { if (p.k.startsWith(k)) a.push(p); else if (p.k.includes(' ' + k)) b.push(p); }
+  const byN = (x, y) => y.n - x.n;
+  return [...a.sort(byN), ...b.sort(byN)].slice(0, 4);
+}
 function setupPlace(input, list, onSet) {
   let timer = 0, seq = 0, items = [];
   const close = () => { list.hidden = true; list.innerHTML = ''; };
-  const pick = (it) => { onSet(it, it.name); input.value = it.name; close(); save(); };
-  input.addEventListener('input', () => {
+  const show = (arr) => {
+    items = arr;
+    list.innerHTML = arr.map((it, i) => `<li data-i="${i}">${esc(it.name)}<small>${esc(it.tag || it.sub || '')}</small></li>`).join('');
+    list.hidden = !arr.length;
+  };
+  const pick = (it) => {
+    const pl = { name: it.name, sub: it.sub || '', lat: it.lat, lon: it.lon };
+    onSet(pl, pl.name); input.value = pl.name; close();
+    state.recents = [pl, ...state.recents.filter((r) => norm(r.name) !== norm(pl.name))].slice(0, 5);
+    save();
+  };
+  const recents = () => state.recents.map((r) => ({ ...r, tag: 'Reciente' }));
+  const refresh = () => {
     onSet(null, input.value);
     clearTimeout(timer);
     const q = input.value.trim();
-    if (q.length < 3) return close();
+    if (!q) return show(recents());
+    const kq = norm(q);
+    const local = [...recents().filter((r) => norm(r.name).startsWith(kq)), ...localSuggest(q)];
+    const dedupe = (arr) => { const seen = new Set(); return arr.filter((it) => { const k = norm(it.name) + '|' + norm(it.sub || '').slice(0, 6); if (seen.has(norm(it.name)) && !it.sub) return false; if (seen.has(k)) return false; seen.add(k); seen.add(norm(it.name)); return true; }); };
+    show(dedupe(local).slice(0, 5));
+    if (q.length < 3) return;
+    const my = ++seq;
     timer = setTimeout(async () => {
-      const my = ++seq;
       try {
         const r = await geocode(q);
         if (my !== seq || document.activeElement !== input) return;
-        items = r;
-        list.innerHTML = r.map((it, i) => `<li data-i="${i}">${esc(it.name)}<small>${esc(it.sub)}</small></li>`).join('');
-        list.hidden = !r.length;
-      } catch (_) { close(); }
-    }, 280);
-  });
+        show(dedupe([...local, ...r]).slice(0, 6));
+      } catch (_) { /* nos quedamos con las sugerencias locales */ }
+    }, 220);
+  };
+  input.addEventListener('input', refresh);
+  input.addEventListener('focus', () => { if (!input.value.trim()) show(recents()); });
   list.addEventListener('pointerdown', (e) => {
     const li = e.target.closest('li');
     if (li) { e.preventDefault(); pick(items[+li.dataset.i]); }
   });
   input.addEventListener('blur', () => { seq++; clearTimeout(timer); setTimeout(close, 150); });
 }
-
 function renderStops() {
   const box = $('stops');
   box.innerHTML = state.stops.map((st, i) => `<div class="field">
       <label for="stop-${i}">Paso por</label>
       <div class="inrow">
-        <input id="stop-${i}" type="text" placeholder="Ciudad o dirección" inputmode="search" value="${esc(st.text || '')}">
+        <input id="stop-${i}" type="text" placeholder="Ciudad o dirección" inputmode="search" autocomplete="off" value="${esc(st.text || '')}">
         <button type="button" class="iconbtn" data-del="${i}" title="Quitar esta parada" aria-label="Quitar esta parada">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
         </button>
@@ -504,22 +601,22 @@ function renderStops() {
   state.stops.forEach((st, i) => setupPlace($('stop-' + i), $('sugg-stop-' + i), (pl, text) => { st.place = pl; st.text = text; }));
   $('btn-add').hidden = state.stops.length >= MAX_STOPS;
 }
-
 async function resolvePlace(place, text, label) {
   if (place) return place;
   const q = (text || '').trim();
   if (!q) throw new Error(`Dime ${label}.`);
+  const loc = localSuggest(q)[0];
+  if (loc && loc.k === norm(q)) return { name: loc.name, sub: loc.sub, lat: loc.lat, lon: loc.lon };
   const r = await geocode(q, 1);
-  if (!r.length) throw new Error(`No encuentro "${q}". Prueba con el nombre del municipio.`);
-  return r[0];
+  if (r.length) return r[0];
+  if (loc) return { name: loc.name, sub: loc.sub, lat: loc.lat, lon: loc.lon };
+  throw new Error(`No encuentro "${q}". Prueba con el nombre del municipio.`);
 }
-
 function status(msg, err = false) {
   const el = $('status');
   el.textContent = msg;
   el.classList.toggle('err', err);
 }
-
 function locate() {
   return new Promise((res, rej) => {
     if (!navigator.geolocation) return rej(new Error('Este navegador no da la ubicación.'));
@@ -529,11 +626,21 @@ function locate() {
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
   });
 }
+function whenLabel() {
+  const v = $('salida').value, d = v ? new Date(v) : null;
+  if (!d || Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function updateWhen() {
+  const l = whenLabel();
+  $('btn-when').textContent = l ? `Salgo el ${l} · cambiar` : 'Salgo ahora · cambiar';
+}
 
-/* ---------- Interfaz: resultados ---------- */
+/* ---------- Utilidades de resultado ---------- */
 const gmaps = (cands) => {
   const o = state.origin, d = state.dest, ll = (p) => p.lat.toFixed(5) + ',' + p.lon.toFixed(5);
-  const via = state.plan.stopPlaces.map((p, i) => ({ p, km: state.plan.route.stopKm[i] || 0 }));
+  const route = state.routes[state.alt];
+  const via = state.stopPlaces.map((p, i) => ({ p, km: route.stopKm[i] || 0 }));
   for (const c of cands) via.push({ p: c, km: c.km });
   via.sort((x, y) => x.km - y.km);
   return `https://www.google.com/maps/dir/?api=1&origin=${ll(o)}&destination=${ll(d)}&waypoints=${via.map((v) => ll(v.p)).join('%7C')}&travelmode=driving`;
@@ -544,16 +651,64 @@ const stPlace = (c) => [nice(c.s[4]), stTown(c)].filter(Boolean).join(' · ');
 const approx = (c) => (c.exact ? '' : '≈ ');
 const mins = (m) => (m < 0.5 ? 'menos de 1 min' : '+' + fmt(m, 0) + ' min');
 const hhmm = (d) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+const dur = (m) => `${Math.floor(m / 60) ? Math.floor(m / 60) + ' h ' : ''}${Math.round(m % 60)} min`;
 const priceTxt = (c) => `${fmt(c.price, 3)} €/L${c.disc ? ` (con tu descuento de ${fmt(c.disc, 0)} cts)` : ''}`;
+const tollTxt = (r) => (r.tollKm >= 1 ? `Peaje: unos ${fmt(r.tollKm, 0)} km${r.tollRefs.length ? ' (' + r.tollRefs.join(', ') + ')' : ''}` : 'Sin peajes');
 const isDark = () => {
   const skin = document.documentElement.dataset.skin;
   return skin === 'asfalto' || (!skin && matchMedia('(prefers-color-scheme: dark)').matches);
 };
 const smooth = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+function baseMap(id) {
+  const map = L.map(id, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
+  map.attributionControl.setPrefix(false);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', className: isDark() ? 'tiles-dark' : '',
+  }).addTo(map);
+  return map;
+}
+const endDot = (map, p, t) => L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#10202E', fillOpacity: 1 }).addTo(map).bindTooltip(t);
 
-/* Gráfico: lo más barato de cada tramo de la ruta, con las candidatas y tu parada encima. */
+/* ---------- Panel 2: elegir el camino en el mapa ---------- */
+function renderRoutes() {
+  const routes = state.routes;
+  if (!routes || !window.L) return;
+  if (state.rmap) { state.rmap.remove(); state.rmap = null; }
+  const map = baseMap('rmap');
+  const accent = isDark() ? getComputedStyle(document.documentElement).getPropertyValue('--blue').trim() || '#6AAEF7' : '#0B4EA2';
+  let bounds = null;
+  // La elegida se dibuja la última para que quede encima
+  routes.map((r, i) => i).sort((a, b) => (a === state.alt) - (b === state.alt)).forEach((i) => {
+    const sel = i === state.alt;
+    const line = L.polyline(routes[i].coords.map((c) => [c[1], c[0]]), { color: sel ? accent : '#7C8894', weight: sel ? 6 : 4, opacity: sel ? 0.95 : 0.7 }).addTo(map);
+    line.on('click', () => { state.alt = i; renderRoutes(); });
+    bounds = bounds ? bounds.extend(line.getBounds()) : line.getBounds();
+  });
+  endDot(map, state.origin, 'Salida'); endDot(map, state.dest, 'Destino');
+  for (const p of state.stopPlaces) L.circleMarker([p.lat, p.lon], { radius: 5, color: '#10202E', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map).bindTooltip(p.name);
+  map.fitBounds(bounds, { padding: [24, 24] });
+  state.rmap = map;
+  $('alts').innerHTML = routes.map((r, i) => `<button type="button" role="radio" data-alt="${i}" aria-checked="${i === state.alt}">
+      <b>${esc(r.name || 'Ruta ' + (i + 1))}</b><small>${fmt(r.distKm, 0)} km · unas ${dur(r.durMin)}</small><small class="${r.tollKm >= 1 ? 'toll' : ''}">${tollTxt(r)}</small></button>`).join('');
+}
+
+/* ---------- Panel 4: resultado ---------- */
+function renderStrip(P) {
+  const pct = (km) => Math.max(0, Math.min(100, km / P.D * 100));
+  const stops = P.chosen.stops;
+  return `<div class="strip card">
+    <div class="road"><div class="track">
+      <i class="reach" style="width:${pct(P.reachKm)}%"></i>
+      ${stops.map((c) => `<span class="pump" style="left:${pct(c.km)}%">${PUMP_SVG}</span>`).join('')}
+      <span class="flag">${FLAG_SVG}</span>
+      <span class="veh drive" style="--to:${pct(stops[0].km)}%">${carSVG()}</span>
+    </div></div>
+    <div class="strip-l"><span>${esc(state.origin.name)}</span><span>${stops.map((c) => 'km ' + fmt(c.km, 0)).join(' · ')}</span><span>${esc(state.dest.name)}</span></div>
+  </div>`;
+}
+
 function renderChart(P) {
-  const W = 340, H = 160, L = 36, R = 10, T = 12, B = 24;
+  const W = 340, H = 170, L = 36, R = 10, T = 12, B = 24;
   const all = P.cands;
   if (!all.length) return '';
   const nb = Math.max(6, Math.min(40, Math.round(P.D / 10)));
@@ -578,16 +733,17 @@ function renderChart(P) {
   const step = P.D > 600 ? 200 : P.D > 250 ? 100 : P.D > 100 ? 50 : P.D > 40 ? 20 : 10;
   for (let k = 0; k <= P.D; k += step) s += `<line x1="${x(k)}" x2="${x(k)}" y1="${H - B}" y2="${H - B + 4}" stroke="var(--muted)"/><text x="${x(k)}" y="${H - 6}" text-anchor="middle">${k === 0 ? 'km 0' : k}</text>`;
   if (pts.length > 1) s += `<polyline fill="none" stroke="var(--muted)" stroke-width="1.6" stroke-linejoin="round" points="${pts.map((q) => x(q.km).toFixed(1) + ',' + y(q.p).toFixed(1)).join(' ')}"/>`;
-  for (const c of P.short) if (!chosen.has(c)) s += `<circle class="dot" data-id="${esc(c.id)}" cx="${x(c.km).toFixed(1)}" cy="${y(c.price).toFixed(1)}" r="3.4" fill="var(--blue)" stroke="var(--surface)" stroke-width="1">${tip(c)}</circle>`;
+  for (const c of P.short) if (!chosen.has(c)) s += `<circle class="dot" data-id="${esc(c.id)}" cx="${x(c.km).toFixed(1)}" cy="${y(c.price).toFixed(1)}" r="3.6" fill="var(--blue)" stroke="var(--surface)" stroke-width="1">${tip(c)}</circle>`;
   for (const c of chosen) s += `<line x1="${x(c.km)}" x2="${x(c.km)}" y1="${y(c.price)}" y2="${H - B}" stroke="var(--red)" stroke-width="1.5"/><circle class="dot" data-id="${esc(c.id)}" cx="${x(c.km)}" cy="${y(c.price)}" r="6" fill="var(--red)" stroke="var(--surface)" stroke-width="2">${tip(c)}</circle>`;
   s += '</svg>';
   return `<section class="card chart"><h3>Precio a lo largo de tu ruta (€/L)</h3>${s}
-    <div class="legend"><span><i style="background:var(--red)"></i>Tu parada</span><span><i style="background:var(--blue)"></i>Candidatas: tócalas</span><span><i class="ln"></i>Lo más barato de cada tramo</span><span>Fondo: hasta donde llegas</span></div></section>`;
+    <div class="legend"><span><i style="background:var(--red)"></i>Tu parada</span><span><i style="background:var(--blue)"></i>Candidatas: tócalas</span><span><i class="ln"></i>Lo más barato de cada tramo</span><span>Fondo: hasta donde llegas sin repostar</span></div>
+    <p class="hint">La línea discontinua es el precio normal en gasolineras de ${P.refKind === 'carretera' ? 'carretera' : 'la ruta'}: ${fmt(P.ref, 3)} €/L.</p></section>`;
 }
 
 function renderList(P) {
   const all = P.singles;
-  if (all.length < 2) return '';
+  if (all.length < 2) return '<p class="hint">No hay más paradas que cumplan tus condiciones en esta ruta.</p>';
   const st = (pl) => pl.stops[0];
   const cheapest = all.reduce((a, c) => (st(c).price < st(a).price ? c : a));
   const measured = all.filter((c) => st(c).exact);
@@ -613,9 +769,7 @@ function renderList(P) {
     </li>`;
   }).join('');
   const btn = (k, t) => `<button type="button" data-sort="${k}" aria-pressed="${state.sort === k}">${t}</button>`;
-  return `<section class="card"><h3>Otras paradas a tu alcance</h3>
-    <div class="sorter">${btn('score', 'Mejor')}${btn('price', 'Más barata')}${btn('detour', 'Menos desvío')}</div>
-    <ul class="list">${li}</ul></section>`;
+  return `<section class="card"><div class="sorter">${btn('score', 'Mejor')}${btn('price', 'Más barata')}${btn('detour', 'Menos desvío')}</div><ul class="list">${li}</ul></section>`;
 }
 
 function renderStopBlock(leg, n, total) {
@@ -632,25 +786,22 @@ function renderStopBlock(leg, n, total) {
     </div>`;
 }
 
-function renderResults() {
+function renderResult() {
   const P = state.plan, car = P.car, ch = P.chosen;
   const fuelName = FUELS.find((f) => f.k === state.fuel).n;
-  const dur = (m) => `${Math.floor(m / 60) ? Math.floor(m / 60) + ' h ' : ''}${Math.round(m % 60)} min`;
-  let main = `<div class="trip"><span><b>${fmt(P.D, 0)} km</b></span><span>unas <b>${dur(P.route.durMin)}</b></span><span>Gastarás <b>${fmt(P.need, 1)} L</b></span><span>Sin repostar llegas al <b>km ${fmt(Math.min(P.D, P.rangeKm), 0)}</b></span></div>`;
-  if (P.routes.length > 1) {
-    main += `<div class="alts" role="group" aria-label="Elige tu ruta">${P.routes.map((r, i) => `<button type="button" data-alt="${i}" aria-pressed="${i === P.alt}"><b>${esc(r.name || 'Ruta ' + (i + 1))}</b><small>${fmt(r.distKm, 0)} km · ${dur(r.durMin)}</small></button>`).join('')}</div>`;
-  }
-  const here = '<button type="button" class="linkbtn" id="btn-here">Ya estoy en ruta: recalcular desde donde estoy</button>';
-
+  $('loading').hidden = true;
+  $('result').hidden = false;
+  const trip = `<div class="trip"><span><b>${fmt(P.D, 0)} km</b></span><span>unas <b>${dur(P.route.durMin)}</b></span><span>Gastarás <b>${fmt(P.need, 1)} L</b></span><span>${tollTxt(P.route)}</span></div>`;
   if (!P.cands.length || !ch) {
-    main += `<div class="note"><p>${P.closed && !P.cands.length ? `Las ${P.closed} gasolineras de esta ruta están cerradas a la hora a la que pasarías.` : `No hay gasolineras con ${esc(fuelName)} a menos de ${fmt(car.corridor, 0)} km de esta ruta. Amplía la búsqueda en Ajustes finos.`}</p></div>`;
-    $('results').innerHTML = `<div class="res-main">${main}</div>`; $('results').hidden = false; return;
+    $('strip').innerHTML = ''; $('tabs').hidden = true;
+    $('t-plan').innerHTML = trip + `<div class="note"><p>${P.closed && !P.cands.length ? `Las ${P.closed} gasolineras de esta ruta están cerradas a la hora a la que pasarías.` : `No hay gasolineras con ${esc(fuelName)} a menos de ${fmt(car.corridor, 0)} km de esta ruta. Amplía la búsqueda en los ajustes finos del coche.`}</p></div>`;
+    showTab('plan'); return;
   }
+  $('tabs').hidden = false;
+  $('strip').innerHTML = renderStrip(P);
   const warns = [];
-  if (P.outOfReach) warns.push(`Con ese nivel no llegas a ninguna gasolinera de la ruta sin bajar de ${fmt(car.reserve, 0)} L. Reposta cuanto antes: estas son las primeras que encontrarás.`);
+  if (P.outOfReach) warns.push(`Con lo que llevas no llegas a ninguna gasolinera de la ruta sin bajar de ${fmt(car.reserve, 0)} L. Reposta cuanto antes: estas son las primeras que encontrarás.`);
   if (P.incomplete && !P.outOfReach) warns.push('El viaje pide más de dos repostajes. Esta es la mejor primera parada; vuelve a calcular desde allí.');
-  if (warns.length) main += `<div class="note">${warns.map((w) => `<p>${w}</p>`).join('')}</div>`;
-
   const n = ch.stops.length;
   const where = n > 1 ? `Para en los km ${ch.stops.map((c) => fmt(c.km, 0)).join(' y ')}` : `Para en el km ${fmt(ch.stops[0].km, 0)}`;
   const gain = ch.net > 0.005;
@@ -661,51 +812,47 @@ function renderResults() {
     const c = ch.stops[0], be = c.price < P.ref ? ch.detCost / (P.ref - c.price) : null;
     why = be != null && be < ch.litres ? `El desvío compensa a partir de ${fmt(Math.max(0.1, be), 1)} L, y vas a echar ${fmt(ch.litres, 0)}.` : 'Es la mejor combinación de precio y desvío en el tramo al que llegas.';
   }
-  main += `<article class="card best">
-    <div class="verdict ${gain ? '' : 'zero'}"><span>${where}</span><b>${gain ? '' : '−'}${eur(Math.abs(ch.net))}<small>${gain ? 'de ahorro' : 'de sobrecoste'}</small></b></div>
-    ${ch.legs.map((l, i) => renderStopBlock(l, i + 1, n)).join('<hr class="sep">')}
-    <p class="why">${why}</p>
-    <a class="go" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir con ${n > 1 ? 'estas paradas' : 'esta parada'} en Google Maps</a>
-    <details class="breakdown"><summary>Ver las cuentas</summary>
-      <dl class="rows">
-        <div><dt>Precio normal en gasolineras de ${P.refKind === 'carretera' ? 'carretera' : 'la ruta'}</dt><dd>${fmt(P.ref, 3)} €/L</dd></div>
-        <div><dt>Litros que echarás</dt><dd>${fmt(ch.litres, 0)} L</dd></div>
-        <div><dt>Ahorro por precio</dt><dd>${ch.gross >= 0 ? '' : '−'}${eur(Math.abs(ch.gross))}</dd></div>
-        <div><dt>Gasolina del desvío (${mins(ch.detMin)})</dt><dd class="${ch.detCost >= 0.005 ? 'neg' : ''}">−${eur(ch.detCost)}</dd></div>
-        <div class="total"><dt>${gain ? 'Ahorro' : 'Sobrecoste'}</dt><dd>${eur(Math.abs(ch.net))}</dd></div>
-      </dl>
-    </details>
-  </article>`;
   const infos = [];
-  if (!P.mustRefuel) infos.push(`Llegarías sin repostar, con unos ${fmt(car.fuelNow - P.need, 0)} L de sobra. Esta parada es por si quieres llenar barato.`);
+  if (!P.mustRefuel) infos.push(`Llegarías sin repostar y sin bajar de ${fmt(car.reserve, 0)} L. Esta parada es por si quieres llenar barato.`);
+  else infos.push(`Sin repostar bajarías de ${fmt(car.reserve, 0)} L hacia el km ${fmt(Math.min(P.D, P.rangeKm), 0)}.`);
+  if (P.earlyBest && P.earlyBest.net > ch.net + 0.3) {
+    const e = P.earlyBest.stops[0];
+    infos.push(`Si no te importara parar en la primera hora, en el km ${fmt(e.km, 0)} (${esc(stName(e))}, ${esc(stTown(e))}) ahorrarías ${eur(P.earlyBest.net - ch.net)} más.`);
+  } else if (P.car.noEarly && ch.stops[0].early) infos.push('No hay parada posible después de la primera hora, así que te propongo una antes.');
   if (P.closed) infos.push(`${P.closed} ${P.closed === 1 ? 'gasolinera descartada porque estará cerrada' : 'gasolineras descartadas porque estarán cerradas'} cuando pases.`);
-  main += `<div class="infos">${infos.map((t) => `<p>${t}</p>`).join('')}${here}</div>`;
-
-  const touch = window.L && L.Browser.mobile;
-  const side = renderChart(P) + `<section class="card"><div class="cardhead"><h3>Mapa</h3>${touch ? '<button type="button" class="mapbtn" id="btn-pan" aria-pressed="false">Mover el mapa</button>' : ''}</div><div id="map"></div></section>`;
-  $('results').innerHTML = `<div class="res-main">${main}</div><div class="res-side">${side}</div><div id="list" class="res-list">${renderList(P)}</div>`;
-  $('results').hidden = false;
-  $('intro').hidden = true;
-  renderMap(P);
+  $('t-plan').innerHTML = `${warns.length ? `<div class="note">${warns.map((w) => `<p>${w}</p>`).join('')}</div>` : ''}
+    <article class="card best">
+      <div class="verdict ${gain ? '' : 'zero'}"><span>${where}</span><b>${gain ? '' : '−'}${eur(Math.abs(ch.net))}<small>${gain ? 'de ahorro' : 'de sobrecoste'}</small></b></div>
+      ${ch.legs.map((l, i) => renderStopBlock(l, i + 1, n)).join('<hr class="sep">')}
+      <p class="why">${why}</p>
+      <a class="go" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir con ${n > 1 ? 'estas paradas' : 'esta parada'} en Google Maps</a>
+      <details class="breakdown"><summary>Ver las cuentas</summary>
+        <dl class="rows">
+          <div><dt>Precio normal en gasolineras de ${P.refKind === 'carretera' ? 'carretera' : 'la ruta'}</dt><dd>${fmt(P.ref, 3)} €/L</dd></div>
+          <div><dt>Litros que echarás</dt><dd>${fmt(ch.litres, 0)} L</dd></div>
+          <div><dt>Ahorro por precio</dt><dd>${ch.gross >= 0 ? '' : '−'}${eur(Math.abs(ch.gross))}</dd></div>
+          <div><dt>Gasolina del desvío (${mins(ch.detMin)})</dt><dd class="${ch.detCost >= 0.005 ? 'neg' : ''}">−${eur(ch.detCost)}</dd></div>
+          <div class="total"><dt>${gain ? 'Ahorro' : 'Sobrecoste'}</dt><dd>${eur(Math.abs(ch.net))}</dd></div>
+        </dl>
+      </details>
+    </article>
+    ${trip}<div class="infos">${infos.map((t) => `<p>${t}</p>`).join('')}<button type="button" class="linkbtn" id="btn-here">Ya estoy en ruta: recalcular desde donde estoy</button></div>`;
+  $('t-precios').innerHTML = renderChart(P);
+  $('t-otras').innerHTML = renderList(P);
+  state.mapDirty = true;
+  showTab('plan');
 }
 
-function renderMap(P) {
-  if (!window.L || !$('map')) return;
+function renderMap() {
+  const P = state.plan;
+  if (!window.L || !P || !P.chosen) return;
   if (state.map) { state.map.remove(); state.map = null; }
   state.markers = new Map();
-  const touch = L.Browser.mobile;
-  // En el móvil el mapa no se arrastra hasta pulsar "Mover el mapa", para que no se pelee con el scroll
-  const map = L.map('map', { zoomControl: true, attributionControl: true, dragging: !touch, scrollWheelZoom: false });
-  map.attributionControl.setPrefix(false);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', className: isDark() ? 'tiles-dark' : '',
-  }).addTo(map);
+  const map = baseMap('map');
   const css = getComputedStyle(document.documentElement);
-  const lineColor = isDark() ? css.getPropertyValue('--blue').trim() : '#0B4EA2';
-  const line = L.polyline(P.route.coords.map((c) => [c[1], c[0]]), { color: lineColor || '#0B4EA2', weight: 4, opacity: 0.9 }).addTo(map);
+  const line = L.polyline(P.route.coords.map((c) => [c[1], c[0]]), { color: isDark() ? css.getPropertyValue('--blue').trim() || '#6AAEF7' : '#0B4EA2', weight: 4, opacity: 0.9 }).addTo(map);
   const chosen = new Set(P.chosen.stops);
   const popup = (c) => `<b>${esc(stName(c))}</b><br>${esc(stPlace(c))}<br>${priceTxt(c)} · ${approx(c)}${mins(c.detourMin)}<br><a href="${gmaps([c])}" target="_blank" rel="noopener">Ir con esta parada</a>`;
-  // Etiqueta de precio solo para las tres mejores de zonas distintas; el resto, puntos
   const top = new Set(), zones = new Set();
   for (const pl of P.singles) {
     const c = pl.stops[0], z = Math.round(c.km / 15);
@@ -723,102 +870,116 @@ function renderMap(P) {
   for (const c of chosen) {
     state.markers.set(String(c.id), L.marker([c.lat, c.lon], { zIndexOffset: 1000, icon: L.divIcon({ className: '', html: `<div class="pin top">${fmt(c.price, 3)} €</div>`, iconSize: [0, 0] }) }).addTo(map).bindPopup(popup(c)));
   }
-  const end = (p, t) => L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#10202E', fillOpacity: 1 }).addTo(map).bindTooltip(t);
-  end(state.origin, 'Salida'); end(state.dest, 'Destino');
-  for (const p of P.stopPlaces) L.circleMarker([p.lat, p.lon], { radius: 5, color: '#10202E', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map).bindTooltip(p.name);
+  endDot(map, state.origin, 'Salida'); endDot(map, state.dest, 'Destino');
+  for (const p of state.stopPlaces) L.circleMarker([p.lat, p.lon], { radius: 5, color: '#10202E', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map).bindTooltip(p.name);
   map.fitBounds(line.getBounds(), { padding: [24, 24] });
   state.map = map;
+  state.mapDirty = false;
 }
-
+function showTab(name) {
+  document.querySelectorAll('#tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === name));
+  for (const t of ['plan', 'precios', 'mapa', 'otras']) $('t-' + t).hidden = t !== name;
+  if (name === 'mapa') { if (state.mapDirty || !state.map) renderMap(); else state.map.invalidateSize(); }
+}
 function showOnMap(id) {
+  showTab('mapa');
   const mk = state.markers.get(String(id));
   if (!mk || !state.map) return;
-  $('map').scrollIntoView({ behavior: smooth(), block: 'center' });
   state.map.setView(mk.getLatLng(), Math.max(state.map.getZoom(), 12));
   mk.openPopup();
 }
 
-/* ---------- Progreso y resumen ---------- */
-const STEP_NAMES = ['Lugares', 'Ruta y precios', 'Desvíos reales'];
+/* ---------- Navegación entre paneles ---------- */
+const NEXT_LABEL = ['Ver el camino', 'Elegir esta ruta', 'Buscar mi parada', 'Nueva búsqueda'];
+const STEP_NAMES = ['Gasolineras de la ruta', 'Desvíos reales', 'Mejor plan'];
+function go(i) {
+  state.panel = i;
+  state.maxPanel = Math.max(state.maxPanel, i);
+  for (let k = 0; k < 4; k++) $('p' + k).hidden = k !== i;
+  document.querySelectorAll('#wiz [data-go]').forEach((b) => {
+    const k = +b.dataset.go;
+    b.disabled = k > state.maxPanel;
+    b.setAttribute('aria-current', k === i ? 'step' : 'false');
+    b.classList.toggle('done', k < i);
+  });
+  $('btn-back').hidden = i === 0;
+  $('btn-next').textContent = NEXT_LABEL[i];
+  status('');
+  if (i === 1) renderRoutes();
+  if (i === 2) { paintCar(); updateGauge(); }
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
 function progress(i) {
-  const el = $('steps');
-  if (i < 0) { el.hidden = true; return; }
-  el.hidden = false;
-  el.innerHTML = STEP_NAMES.map((t, k) => `<li class="${k < i ? 'done' : k === i ? 'active' : ''}">${t}</li>`).join('');
+  $('steps').innerHTML = STEP_NAMES.map((t, k) => `<li class="${k < i ? 'done' : k === i ? 'active' : ''}">${t}</li>`).join('');
 }
+function busy(on, label) {
+  const b = $('btn-next');
+  b.disabled = on;
+  if (on && label) b.textContent = label;
+  if (!on) b.textContent = NEXT_LABEL[state.panel];
+}
+const fail = (e) => status(e && e.name === 'AbortError' ? 'El servidor tarda demasiado. Prueba otra vez.' : (e && e.message) || 'Algo ha fallado. Prueba otra vez.', true);
 
-function showSummary(P) {
-  const fuelName = FUELS.find((f) => f.k === state.fuel).n;
-  const nStops = P.stopPlaces.length;
-  $('sum-route').textContent = `${state.origin.name} → ${state.dest.name}`;
-  $('sum-car').textContent = `${fuelName} · ${fmt(P.car.fuelNow, 0)} L al salir${nStops ? ` · ${nStops} ${nStops === 1 ? 'parada' : 'paradas'}` : ''}${$('salida').value ? ' · ' + whenLabel() : ''}`;
-  $('form').hidden = true;
-  $('summary').hidden = false;
-}
-function editSearch() {
-  $('form').hidden = false;
-  $('summary').hidden = true;
-}
-function whenLabel() {
-  const v = $('salida').value, d = v ? new Date(v) : null;
-  if (!d || Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
-function updateWhen() {
-  const l = whenLabel();
-  $('btn-when').textContent = l ? `Salgo el ${l} · cambiar` : 'Salgo ahora · cambiar';
-}
-
-/* ---------- Flujo principal ---------- */
-async function run(alt = 0) {
-  const btn = $('btn-go');
-  btn.disabled = true;
+async function stepRoute() {
+  busy(true, 'Trazando rutas…');
   try {
-    status(''); progress(0);
     state.stops = state.stops.filter((x) => x.place || (x.text || '').trim());
-    const a = (state.origin = await resolvePlace(state.origin, $('origen').value, 'de dónde sales'));
-    const b = (state.dest = await resolvePlace(state.dest, $('destino').value, 'a dónde vas'));
+    state.origin = await resolvePlace(state.origin, $('origen').value, 'de dónde sales');
+    state.dest = await resolvePlace(state.dest, $('destino').value, 'a dónde vas');
     for (const st of state.stops) st.place = await resolvePlace(st.place, st.text, 'la parada');
-    const stopPlaces = state.stops.map((x) => x.place);
-    renderStops();
-    save();
-    progress(1);
-    const [routes] = await Promise.all([fetchRoute([a, ...stopPlaces, b]), loadStations()]);
-    const route = routes[alt] || routes[0];
+    state.stopPlaces = state.stops.map((x) => x.place);
+    $('origen').value = state.origin.name; $('destino').value = state.dest.name;
+    renderStops(); save();
+    state.routes = await fetchRoute([state.origin, ...state.stopPlaces, state.dest], $('peajes').checked);
+    state.alt = 0; state.plan = null; state.maxPanel = 1;
+    busy(false); go(1);
+  } catch (e) { busy(false); fail(e); }
+}
+
+async function stepCompute() {
+  go(3);
+  $('loading').hidden = false; $('result').hidden = true;
+  paintCar(); progress(0); busy(true, 'Calculando…');
+  try {
+    await state.stationsP;
+    if (!state.stations) await loadStations();
+    const route = state.routes[state.alt];
     const car = readCar();
     const fuel = FUELS.find((f) => f.k === state.fuel);
     const near = stationsNearRoute(route, state.stations, fuel.i, car.corridor, readDepart());
     const P = preparePlan(route, near, car);
-    P.stopPlaces = stopPlaces;
-    P.routes = routes; P.alt = routes.indexOf(route);
+    P.stopPlaces = state.stopPlaces;
     state.plan = P;
     let measured = true;
-    if (P.short.length) {
-      progress(2);
-      try { await refineDetours(P); } catch (_) { measured = false; }
-    }
+    progress(1);
+    if (P.short.length) { try { await refineDetours(P); } catch (_) { measured = false; } }
+    progress(2);
     solve(P);
-    progress(-1);
-    showSummary(P);
-    renderResults();
+    renderResult();
+    busy(false);
     status(measured ? '' : 'No he podido medir los desvíos exactos: los minutos son aproximados.');
-    $('summary').scrollIntoView({ behavior: smooth(), block: 'start' });
-  } catch (e) {
-    progress(-1); editSearch();
-    status(e && e.name === 'AbortError' ? 'El servidor tarda demasiado. Prueba otra vez.' : (e && e.message) || 'Algo ha fallado. Prueba otra vez.', true);
-  } finally {
-    btn.disabled = false;
-  }
+  } catch (e) { busy(false); go(2); fail(e); }
 }
 
 function init() {
   restore();
-  renderFuels();
-  renderDiscounts();
-  updateGauge();
+  renderFuels(); renderDiscounts(); paintCar(); updateGauge(); updateWhen();
   setupPlace($('origen'), $('sugg-origen'), (pl) => { state.origin = pl; });
   setupPlace($('destino'), $('sugg-destino'), (pl) => { state.dest = pl; });
   renderStops();
+  go(0);
+  // Los precios se descargan ya, en segundo plano: sirven también para predecir municipios al escribir
+  state.stationsP = loadStations().catch(() => {});
+
+  $('btn-next').addEventListener('click', () => {
+    if (state.panel === 0) stepRoute();
+    else if (state.panel === 1) go(2);
+    else if (state.panel === 2) { save(); stepCompute(); }
+    else { state.maxPanel = 0; go(0); }
+  });
+  $('btn-back').addEventListener('click', () => go(Math.max(0, state.panel - 1)));
+  $('wiz').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b && !b.disabled) go(+b.dataset.go); });
+  $('alts').addEventListener('click', (e) => { const b = e.target.closest('[data-alt]'); if (b) { state.alt = +b.dataset.alt; state.plan = null; renderRoutes(); } });
 
   $('btn-add').addEventListener('click', () => {
     if (state.stops.length >= MAX_STOPS) return;
@@ -829,11 +990,28 @@ function init() {
     if (!b) return;
     state.stops.splice(+b.dataset.del, 1); renderStops(); save();
   });
-  $('fuels').addEventListener('click', (e) => {
-    const b = e.target.closest('.chip');
-    if (!b) return;
-    state.fuel = b.dataset.k; renderFuels(); save();
+  $('btn-swap').addEventListener('click', () => {
+    [state.origin, state.dest] = [state.dest, state.origin];
+    const o = $('origen').value; $('origen').value = $('destino').value; $('destino').value = o;
+    state.stops.reverse(); renderStops(); save();
   });
+  const useLocation = async () => {
+    const b = $('btn-geo'); b.classList.add('busy');
+    try { state.origin = await locate(); $('origen').value = 'Mi ubicación'; status(''); }
+    catch (e) { status(e.message, true); }
+    finally { b.classList.remove('busy'); }
+  };
+  $('btn-geo').addEventListener('click', useLocation);
+  $('btn-when').addEventListener('click', () => { const b = $('when-box'); b.hidden = !b.hidden; if (!b.hidden) $('salida').focus(); });
+  $('salida').addEventListener('input', updateWhen);
+  $('btn-now').addEventListener('click', () => { $('salida').value = ''; $('when-box').hidden = true; updateWhen(); });
+  $('peajes').addEventListener('change', save);
+  $('temprano').addEventListener('change', save);
+
+  $('fuels').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if (b) { state.fuel = b.dataset.k; renderFuels(); save(); } });
+  $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; paintCar(); save(); } });
+  $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); save(); } });
+  $('umbral').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { state.frac = +b.dataset.f; updateGauge(); save(); } });
   $('discounts').addEventListener('input', (e) => {
     const k = e.target.dataset.brand;
     if (!k) return;
@@ -842,55 +1020,29 @@ function init() {
     save();
   });
   for (const id of FIELDS) $(id).addEventListener('input', () => { updateGauge(); save(); });
-  $('btn-swap').addEventListener('click', () => {
-    [state.origin, state.dest] = [state.dest, state.origin];
-    const o = $('origen').value; $('origen').value = $('destino').value; $('destino').value = o;
-    state.stops.reverse(); renderStops(); save();
-  });
-  const useLocation = async (then) => {
-    const b = $('btn-geo'); b.classList.add('busy');
-    try { state.origin = await locate(); $('origen').value = 'Mi ubicación'; status(''); if (then) then(); }
-    catch (e) { status(e.message, true); }
-    finally { b.classList.remove('busy'); }
-  };
-  $('btn-geo').addEventListener('click', () => useLocation());
-  $('btn-edit').addEventListener('click', () => { editSearch(); $('form').scrollIntoView({ behavior: smooth(), block: 'start' }); });
-  $('btn-when').addEventListener('click', () => { const b = $('when-box'); b.hidden = !b.hidden; if (!b.hidden) $('salida').focus(); });
-  $('salida').addEventListener('input', updateWhen);
-  $('btn-now').addEventListener('click', () => { $('salida').value = ''; $('when-box').hidden = true; updateWhen(); });
+
   const paintSkins = () => { const cur = document.documentElement.dataset.skin || ''; document.querySelectorAll('[data-skin-btn]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.skinBtn === cur)); };
   paintSkins();
   $('skins').addEventListener('click', (e) => {
     const b = e.target.closest('[data-skin-btn]');
     if (!b) return;
     if (b.dataset.skinBtn) document.documentElement.dataset.skin = b.dataset.skinBtn; else delete document.documentElement.dataset.skin;
-    paintSkins(); save();
-    if (state.plan && state.plan.chosen) renderMap(state.plan);
+    paintSkins(); save(); state.mapDirty = true;
   });
-  $('form').addEventListener('submit', (e) => { e.preventDefault(); run(0); });
-  $('results').addEventListener('click', (e) => {
+
+  $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
+  $('p3').addEventListener('click', async (e) => {
     const sortBtn = e.target.closest('[data-sort]');
-    if (sortBtn && state.plan) { state.sort = sortBtn.dataset.sort; $('list').innerHTML = renderList(state.plan); return; }
+    if (sortBtn && state.plan) { state.sort = sortBtn.dataset.sort; $('t-otras').innerHTML = renderList(state.plan); return; }
     const show = e.target.closest('[data-show]');
     if (show) { e.preventDefault(); showOnMap(show.dataset.show); return; }
     const dot = e.target.closest('.dot');
     if (dot) { showOnMap(dot.dataset.id); return; }
-    const pan = e.target.closest('#btn-pan');
-    if (pan && state.map) {
-      const on = pan.getAttribute('aria-pressed') !== 'true';
-      pan.setAttribute('aria-pressed', on); pan.textContent = on ? 'Bloquear el mapa' : 'Mover el mapa';
-      if (on) state.map.dragging.enable(); else state.map.dragging.disable();
-      return;
-    }
-    const altBtn = e.target.closest('[data-alt]');
-    if (altBtn) { run(+altBtn.dataset.alt); return; }
     if (e.target.closest('#btn-here')) {
-      editSearch();
-      useLocation(() => {
-        $('salida').value = ''; updateWhen();
-        status('Origen cambiado a tu ubicación. Ajusta el nivel del depósito y pulsa Buscar mi parada.');
-        $('nivel').scrollIntoView({ behavior: smooth(), block: 'center' });
-      });
+      state.maxPanel = 0; go(0);
+      await useLocation();
+      $('salida').value = ''; updateWhen();
+      if (state.origin && state.origin.gps) status('Origen cambiado a tu ubicación. Revisa el nivel del depósito en el paso del coche.');
     }
   });
 }
