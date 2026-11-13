@@ -346,7 +346,7 @@ const gmaps = (c) => {
 const stName = (c) => nice(c.s[3] || 'Gasolinera');
 const stPlace = (c) => [nice(c.s[4]), nice(c.s[5] || c.s[6])].filter(Boolean).join(' · ');
 const approx = (c) => (c.exact ? '' : '≈ ');
-const mins = (m) => (m < 0.5 ? 'sin desvío' : '+' + fmt(m, 0) + ' min');
+const mins = (m) => (m < 0.5 ? 'menos de 1 min' : '+' + fmt(m, 0) + ' min');
 
 function renderChart(plan, best) {
   const W = 340, H = 150, L = 34, R = 8, T = 10, B = 24;
