@@ -476,8 +476,8 @@ function renderMap(plan, best) {
   const dark = matchMedia('(prefers-color-scheme: dark)').matches;
   const map = L.map('map', { zoomControl: false, attributionControl: true });
   map.attributionControl.setPrefix(false);
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${dark ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}{r}.png`, {
-    maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap, © CARTO',
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', className: dark ? 'tiles-dark' : '',
   }).addTo(map);
   const css = getComputedStyle(document.documentElement);
   const line = L.polyline(plan.route.coords.map((c) => [c[1], c[0]]), { color: css.getPropertyValue('--blue').trim() || '#0B4EA2', weight: 4, opacity: 0.9 }).addTo(map);
