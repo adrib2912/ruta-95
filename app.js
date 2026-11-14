@@ -7,6 +7,7 @@ const API = {
   osrm: ['https://router.project-osrm.org', 'https://routing.openstreetmap.de/routed-car'],
   photon: 'https://photon.komoot.io/api/',
   nominatim: 'https://nominatim.openstreetmap.org/search',
+  valhalla: 'https://valhalla1.openstreetmap.de/route',
 };
 // Registro compacto de estación: [id, lat, lon, rótulo, dirección, localidad, municipio, provincia, horario, g95, g98, gA, gA+, GLP]
 const FUELS = [
@@ -455,7 +456,118 @@ async function geocodeRemote(q, limit) {
   });
 }
 
+/* Trocea un tramo (coords [lon, lat]) en trozos de unos 2 km con su carretera y si está marcado como peaje.
+   El peaje y su precio se deciden luego con la tabla de tarifas. */
+function pushSegs(route, refs, toll, g, distKm, atKm) {
+  if (!(refs.length || toll) || !(distKm > 0)) return;
+  if (!g || g.length < 2) {
+    const n = Math.max(1, Math.round(distKm / 2));
+    for (let j = 0; j < n; j++) {
+      const km = distKm / n, a = atKm + km * (j + 0.5), p = pointAtKm(route, Math.min(route.distKm, a));
+      route.segs.push({ refs, toll, km, lat: p.lat, lon: p.lon, atKm: a });
+    }
+    return;
+  }
+  const lens = [];
+  for (let i = 1; i < g.length; i++) lens.push(hav(g[i - 1][1], g[i - 1][0], g[i][1], g[i][0]));
+  const k = distKm / Math.max(1e-6, lens.reduce((x, y) => x + y, 0));
+  let acc = 0, chunk = 0, cLat = 0, cLon = 0, n = 0;
+  for (let i = 1; i < g.length; i++) {
+    chunk += lens[i - 1] * k; cLat += g[i][1]; cLon += g[i][0]; n++;
+    if (chunk >= 2 || i === g.length - 1) {
+      route.segs.push({ refs, toll, km: chunk, lat: cLat / n, lon: cLon / n, atKm: atKm + acc + chunk / 2 });
+      acc += chunk; chunk = 0; cLat = 0; cLon = 0; n = 0;
+    }
+  }
+}
+const ROAD_REF = /^[A-Z]{1,3}-?\d+[A-Z]?$/;
+/* Nombre de la ruta (sus carreteras principales), peaje y referencias, comunes a los dos servidores */
+function finishRoute(route, refLen, fallbackName) {
+  const tot = route.distKm * 1000;
+  const main = [...refLen].filter(([, d]) => d > tot * 0.08).sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
+  route.name = main.length ? [...refLen.keys()].filter((k) => main.includes(k)).join(' · ') : fallbackName;
+  const tc = tollCost(route, new Date(), false);
+  route.tollKm = tc.km;
+  route.tollRefs = [...new Set(tc.parts.map((g) => g.ref).filter(Boolean))].slice(0, 3);
+  return route;
+}
+/* Polilínea codificada de Valhalla (precisión 6) a [lon, lat] */
+function decodePoly6(str) {
+  const out = []; let i = 0, lat = 0, lon = 0;
+  while (i < str.length) {
+    for (const which of [0, 1]) {
+      let b, shift = 0, res = 0;
+      do { b = str.charCodeAt(i++) - 63; res |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      const d = res & 1 ? ~(res >> 1) : res >> 1;
+      if (which === 0) lat += d; else lon += d;
+    }
+    out.push([lon / 1e6, lat / 1e6]);
+  }
+  return out;
+}
+/* Rutas con Valhalla (servidor público de OpenStreetMap Alemania): distingue los peajes y sabe evitarlos */
+async function valhallaRoutes(points, avoidTolls) {
+  const req = {
+    locations: points.map((p) => ({ lat: +p.lat.toFixed(6), lon: +p.lon.toFixed(6), type: 'break' })),
+    costing: 'auto', costing_options: { auto: { use_tolls: avoidTolls ? 0 : 0.5 } },
+    units: 'kilometers', language: 'es-ES', alternates: points.length === 2 ? 2 : 0,
+  };
+  const j = await getJSON(API.valhalla + '?json=' + encodeURIComponent(JSON.stringify(req)), {}, 25000).catch((e) => { throw e; });
+  if (!j || !j.trip) throw new Error((j && j.error) || 'sin respuesta');
+  const trips = [j.trip, ...((j.alternates || []).map((x) => x.trip).filter(Boolean))];
+  return trips.map((t) => {
+    const coords = [], legsKm = [];
+    const refLen = new Map();
+    for (const l of t.legs) {
+      const c = decodePoly6(l.shape);
+      coords.push(...(coords.length ? c.slice(1) : c));
+      legsKm.push(l.summary.length);
+    }
+    const route = buildRoute(coords, t.summary.length, t.summary.time / 60);
+    let acc = 0;
+    route.stopKm = legsKm.slice(0, -1).map((k) => (acc += k));
+    route.segs = [];
+    let at = 0;
+    for (const l of t.legs) {
+      const c = decodePoly6(l.shape);
+      for (const m of l.maneuvers || []) {
+        const refs = [...new Set([...(m.street_names || []), ...(m.begin_street_names || [])].map((x) => String(x).trim().toUpperCase()).filter((x) => ROAD_REF.test(x)))];
+        for (const r of refs) refLen.set(r, (refLen.get(r) || 0) + m.length * 1000);
+        pushSegs(route, refs, !!m.toll, c.slice(m.begin_shape_index, m.end_shape_index + 1), m.length, at);
+        at += m.length;
+      }
+    }
+    const names = [...new Set((t.legs || []).flatMap((l) => (l.maneuvers || []).flatMap((m) => m.street_names || [])))].slice(0, 2).join(', ');
+    return finishRoute(route, refLen, names);
+  });
+}
+/* Rutas con OSRM (reserva) */
+function osrmRoutes(j) {
+  return j.routes.slice(0, 3).map((r) => {
+    const route = buildRoute(r.geometry.coordinates, r.distance / 1000, r.duration / 60);
+    let acc = 0;
+    route.stopKm = (r.legs || []).slice(0, -1).map((l) => (acc += l.distance / 1000));
+    const refLen = new Map();
+    route.segs = [];
+    let at = 0;
+    for (const l of r.legs || []) for (const st of l.steps || []) {
+      const refs = String(st.ref || '').split(';').map((x) => x.trim().toUpperCase()).filter(Boolean);
+      for (const t of refs) if (ROAD_REF.test(t)) refLen.set(t, (refLen.get(t) || 0) + st.distance);
+      const toll = (st.intersections || []).some((x) => (x.classes || []).includes('toll'));
+      pushSegs(route, refs, toll, st.geometry && st.geometry.coordinates, st.distance / 1000, at / 1000);
+      at += st.distance;
+    }
+    return finishRoute(route, refLen, [...new Set((r.legs || []).flatMap((l) => String(l.summary || '').split(',').map((t) => t.trim()).filter(Boolean)))].slice(0, 2).join(', '));
+  });
+}
 async function fetchRoute(points, avoidTolls = false) {
+  try {
+    const r = await valhallaRoutes(points, avoidTolls);
+    if (r.length) { state.router = 'valhalla'; return r; }
+  } catch (e) {
+    if (/no path|442|No suitable/i.test(String(e && e.message))) throw new Error('No encuentro una ruta en coche entre esos puntos.');
+  }
+  // Reserva: OSRM (no distingue bien los peajes españoles)
   let j;
   const q = (ex) => `/route/v1/driving/${points.map((p) => p.lon.toFixed(5) + ',' + p.lat.toFixed(5)).join(';')}?overview=full&geometries=geojson&steps=true${points.length === 2 ? '&alternatives=3' : ''}${ex ? '&exclude=toll' : ''}`;
   try {
@@ -464,54 +576,8 @@ async function fetchRoute(points, avoidTolls = false) {
   } catch (e) {
     throw new Error(e && e.message === 'NoRoute' ? 'No encuentro una ruta en coche entre esos puntos.' : 'El servicio de rutas no responde. Prueba otra vez en un momento.');
   }
-  return j.routes.slice(0, 3).map((r) => {
-    const route = buildRoute(r.geometry.coordinates, r.distance / 1000, r.duration / 60);
-    let acc = 0;
-    route.stopKm = (r.legs || []).slice(0, -1).map((l) => (acc += l.distance / 1000));
-    const refs = new Map();
-    for (const l of r.legs || []) for (const st of l.steps || []) for (const ref of String(st.ref || '').split(';')) {
-      const t = ref.trim();
-      if (/^[A-Z]{1,3}-?\d+/.test(t)) refs.set(t, (refs.get(t) || 0) + st.distance);
-    }
-    const main = [...refs].filter(([, d]) => d > r.distance * 0.08).sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
-    // Tramos de unos 2 km con la carretera, su punto medio y si OSRM los marca como peaje; el peaje se decide luego con la tabla
-    route.segs = [];
-    let at = 0;
-    for (const l of r.legs || []) for (const st of l.steps || []) {
-      const refs = String(st.ref || '').split(';').map((x) => x.trim().toUpperCase()).filter(Boolean);
-      const toll = (st.intersections || []).some((x) => (x.classes || []).includes('toll'));
-      const g = (st.geometry && st.geometry.coordinates) || [];
-      if ((refs.length || toll) && g.length < 2 && st.distance > 0) {
-        // Sin trazado del paso: se trocea igual, situando cada trozo sobre la ruta
-        const n = Math.max(1, Math.round(st.distance / 2000));
-        for (let j = 0; j < n; j++) {
-          const km = st.distance / 1000 / n, atKm = at / 1000 + km * (j + 0.5), p = pointAtKm(route, Math.min(route.distKm, atKm));
-          route.segs.push({ refs, toll, km, lat: p.lat, lon: p.lon, atKm });
-        }
-      } else if ((refs.length || toll) && st.distance > 0) {
-        let acc = 0, start = 0, sLat = g[0][1], sLon = g[0][0];
-        const lens = [];
-        for (let i = 1; i < g.length; i++) lens.push(hav(g[i - 1][1], g[i - 1][0], g[i][1], g[i][0]));
-        const k = st.distance / 1000 / Math.max(1e-6, lens.reduce((a, b) => a + b, 0));
-        let chunk = 0, cLat = 0, cLon = 0, n = 0;
-        for (let i = 1; i < g.length; i++) {
-          chunk += lens[i - 1] * k; cLat += g[i][1]; cLon += g[i][0]; n++;
-          if (chunk >= 2 || i === g.length - 1) {
-            route.segs.push({ refs, toll, km: chunk, lat: cLat / n, lon: cLon / n, atKm: (at / 1000) + acc + chunk / 2 });
-            acc += chunk; chunk = 0; cLat = 0; cLon = 0; n = 0;
-          }
-        }
-      }
-      at += st.distance;
-    }
-    const tc = tollCost(route, new Date(), false);
-    route.tollKm = tc.km;
-    const tolls = new Set(tc.parts.map((g) => g.ref).filter(Boolean));
-    route.tollRefs = [...tolls].slice(0, 3);
-    route.name = main.length ? [...refs.keys()].filter((k) => main.includes(k)).join(' · ')
-      : [...new Set((r.legs || []).flatMap((l) => String(l.summary || '').split(',').map((t) => t.trim()).filter(Boolean)))].slice(0, 2).join(', ');
-    return route;
-  });
+  state.router = 'osrm';
+  return osrmRoutes(j);
 }
 
 /* ---------- Peajes ----------
