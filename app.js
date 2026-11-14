@@ -1304,7 +1304,7 @@ const stPlace = (c) => [nice(c.s[4]), stTown(c)].filter(Boolean).join(' · ');
 const approx = (c) => (c.exact ? '' : '≈ ');
 const mins = (m) => (m < 0.5 ? 'menos de 1 min' : '+' + fmt(m, 0) + ' min');
 const hhmm = (d) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-const dur = (m) => `${Math.floor(m / 60) ? Math.floor(m / 60) + ' h ' : ''}${Math.round(m % 60)} min`;
+const dur = (m) => { const t = Math.round(m), h = Math.floor(t / 60); return `${h ? h + ' h ' : ''}${t % 60} min`; };
 const priceTxt = (c) => `${fmt(c.price, 3)} €/L${c.disc ? ` (con tu descuento de ${fmt(c.disc, 0)} cts)` : ''}`;
 const tollTxt = (r) => {
   if (!(r.tollKm >= 1)) return 'Sin peajes';
@@ -1330,12 +1330,18 @@ function baseMap(id) {
   let vec = null;
   try {
     if (L.maplibreGL && window.maplibregl && hasWebGL()) {
-      vec = L.maplibreGL({ style: MAP_STYLE(), attribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>', interactive: false }).addTo(map);
-      // Si el estilo no llega en unos segundos o el móvil no puede con WebGL, se vuelve al mapa de siempre
+      vec = L.maplibreGL({ style: MAP_STYLE(), attribution: '© <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OSM</a>', interactive: false }).addTo(map);
+      // Nombres en español donde los haya
       const gl = vec.getMaplibreMap && vec.getMaplibreMap();
-      let ok = false;
-      if (gl) { gl.once('load', () => { ok = true; }); gl.on('error', (e) => { if (!ok && e && e.error && /style|Failed to fetch|WebGL/i.test(String(e.error.message))) { map.removeLayer(vec); vec = null; raster(); ok = true; } }); }
-      setTimeout(() => { if (!ok && vec) { map.removeLayer(vec); vec = null; raster(); } }, 6000);
+      if (gl) gl.on('styledata', () => {
+        if (gl.__es) return;
+        try {
+          for (const l of gl.getStyle().layers) if (l.type === 'symbol' && l.layout && l.layout['text-field'] && /name/.test(JSON.stringify(l.layout['text-field']))) {
+            gl.setLayoutProperty(l.id, 'text-field', ['coalesce', ['get', 'name:es'], ['get', 'name']]);
+          }
+          gl.__es = true;
+        } catch (_) { /* el estilo aún no está listo */ }
+      });
     }
   } catch (_) { vec = null; }
   if (!vec) raster();
