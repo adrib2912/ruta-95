@@ -1,6 +1,7 @@
 /* Ruta 95. Idea: señal de autovía para la ruta + hito kilométrico para la parada.
    El rojo se reserva para "tu parada"; la acción principal va en tinta. Una columna en móvil, dos en escritorio. */
 :root {
+  --spring: cubic-bezier(.2, .9, .25, 1.08); --bounce: cubic-bezier(.3, 1.4, .5, 1);
   --bg: #ECEFF3;
   --surface: #FFFFFF;
   --ink: #10202E;
@@ -822,3 +823,29 @@ a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !im
 .lp-p b { font: 700 18px var(--f-display); font-variant-numeric: tabular-nums; }
 .lp-go { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 14px; background: var(--cta-bg, var(--blue)); color: var(--cta-ink, #fff); font-weight: 700; text-decoration: none; }
 .ish { width: 17px; height: 17px; vertical-align: -3px; color: var(--blue); }
+
+/* Movimiento con efecto muelle, como en iOS (frena y se asienta) */
+@supports (animation-timing-function: linear(0, 1)) {
+  :root { --spring: linear(0.0, 0.02, 0.072, 0.145, 0.232, 0.325, 0.42, 0.512, 0.598, 0.677, 0.748, 0.81, 0.862, 0.907, 0.943, 0.972, 0.995, 1.011, 1.023, 1.031, 1.036, 1.038, 1.038, 1.037, 1.034, 1.031, 1.028, 1.024, 1.021, 1.017, 1.014, 1.011, 1.009, 1.006, 1.004, 1.003, 1.002, 1.001, 1.0, 0.999, 1); --bounce: linear(0.0, 0.035, 0.126, 0.251, 0.393, 0.538, 0.676, 0.799, 0.903, 0.985, 1.047, 1.09, 1.115, 1.125, 1.125, 1.116, 1.102, 1.085, 1.066, 1.048, 1.032, 1.018, 1.006, 0.997, 0.991, 0.987, 0.985, 0.984, 0.985, 0.986, 0.988, 0.991, 0.993, 0.995, 0.997, 0.999, 1.0, 1.001, 1.001, 1.002, 1); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .in-f { animation: inF .55s var(--spring) both; }
+  .in-b { animation: inB .55s var(--spring) both; }
+  .tiles .tile, .list li { animation: rise .55s var(--spring) both; }
+  .slide.on { animation: slideIn .6s var(--spring) both; }
+  .slide.on.rev { animation-name: slideBack; }
+  .slide.on .sr { animation: rise .6s var(--spring) both; animation-delay: var(--d, 0s); }
+  .stopA, .hero, .lastplan { animation: rise .6s .05s var(--spring) both; }
+  .q.on, .qcard.on { animation-timing-function: var(--spring); }
+  .st-save { animation: pop .7s var(--bounce) both; animation-delay: var(--d, 0s); }
+  button, .cta, .back, .tile, .chip, .goBig, .st-go, .lp-go, .lp-stop, .seg button, .skins button, .switch { transition: transform .45s var(--bounce), background-color .2s, opacity .2s, box-shadow .2s; }
+  :is(button, .cta, .back, .tile, .chip, .goBig, .st-go, .lp-go, .lp-stop):active:not(:disabled) { transform: scale(.96); transition: transform .08s ease-out; }
+  .st-dots button { transition: width .5s var(--spring), background .25s; }
+  .wiz button { transition: border-color .3s, color .3s; }
+}
+@keyframes pop { from { opacity: 0; transform: scale(.85); } }
+/* La hoja de ajustes la mueve el dedo (JS): sin animaciones de CSS */
+.sheet.js .sheet-panel, .sheet.js .sheet-bg { animation: none !important; }
+.sheet.js .sheet-panel { will-change: transform; touch-action: pan-y; }
+.sheet .grab { width: 40px; height: 5px; margin: 0 auto; position: relative; }
+.sheet .grab::after { content: ''; position: absolute; inset: -14px -60px; }

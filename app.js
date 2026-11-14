@@ -2284,13 +2284,64 @@ function init() {
   $('skins').addEventListener('click', paintThemeSeg);
   // Hoja de ajustes
   const sheet = $('sheet');
-  const openSheet = () => { paintThemeSeg(); sheet.hidden = false; sheet.classList.remove('closing'); document.body.classList.add('locked'); sheet.querySelector('.sheet-done').focus({ preventScroll: true }); };
+  // Muelle físico para la hoja: sigue al dedo y se suelta con la velocidad del gesto
+  const shPanel = sheet.querySelector('.sheet-panel'), shShade = sheet.querySelector('.sheet-bg');
+  const shCalm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let shY = 0, shV = 0, shRaf = 0;
+  const shPaint = () => { const h = shPanel.offsetHeight || 1; shPanel.style.transform = `translate3d(0,${Math.max(shY, -24)}px,0)`; shShade.style.opacity = String(Math.max(0, Math.min(1, 1 - shY / h))); };
+  const shSpring = (target, done, k = 420, c = 34) => {
+    cancelAnimationFrame(shRaf);
+    if (shCalm()) { shY = target; shV = 0; shPaint(); return done && done(); }
+    let last = performance.now();
+    const step = (now) => {
+      const dt = Math.min(0.032, (now - last) / 1000); last = now;
+      const a = -k * (shY - target) - c * shV; shV += a * dt; shY += shV * dt; shPaint();
+      if (Math.abs(shV) < 8 && Math.abs(shY - target) < 0.5) { shY = target; shV = 0; shPaint(); return done && done(); }
+      shRaf = requestAnimationFrame(step);
+    };
+    shRaf = requestAnimationFrame(step);
+  };
+  sheet.classList.add('js');
+  const openSheet = () => {
+    paintThemeSeg(); sheet.hidden = false; document.body.classList.add('locked');
+    shY = shPanel.offsetHeight; shV = 0; shPaint(); shSpring(0);
+    sheet.querySelector('.sheet-done').focus({ preventScroll: true });
+  };
   const closeSheet = () => {
     if (sheet.hidden) return;
-    const fin = () => { sheet.hidden = true; sheet.classList.remove('closing'); document.body.classList.remove('locked'); updateGauge(); $('btn-settings').focus({ preventScroll: true }); };
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return fin();
-    sheet.classList.add('closing'); setTimeout(fin, 210);
+    shSpring(shPanel.offsetHeight + 40, () => { sheet.hidden = true; shPanel.style.transform = ''; document.body.classList.remove('locked'); updateGauge(); $('btn-settings').focus({ preventScroll: true }); }, 300, 30);
   };
+  // Arrastrar hacia abajo: desde el asa o la cabecera siempre; desde el contenido solo si está arriba del todo
+  let shDrag = null;
+  shPanel.addEventListener('pointerdown', (e) => {
+    if (e.button > 0 || e.target.closest('input, select, textarea, .seg, .skins')) return;
+    const head = e.target.closest('.grab, .sheet-head');
+    if (!head && shPanel.scrollTop > 0) return;
+    shDrag = { id: e.pointerId, y0: e.clientY, x0: e.clientX, base: shY, head: !!head, on: false, t: performance.now(), ly: e.clientY, v: 0 };
+  });
+  shPanel.addEventListener('pointermove', (e) => {
+    if (!shDrag || e.pointerId !== shDrag.id) return;
+    const dy = e.clientY - shDrag.y0;
+    if (!shDrag.on) {
+      if (Math.abs(e.clientX - shDrag.x0) > Math.abs(dy) || (dy < 6 && !shDrag.head) || Math.abs(dy) < 6) return;
+      if (!shDrag.head && shPanel.scrollTop > 0) { shDrag = null; return; }
+      shDrag.on = true; cancelAnimationFrame(shRaf); try { shPanel.setPointerCapture(e.pointerId); } catch (_) { /* nada */ }
+    }
+    e.preventDefault();
+    const now = performance.now(), dt = Math.max(1, now - shDrag.t);
+    shDrag.v = 0.7 * shDrag.v + 0.3 * ((e.clientY - shDrag.ly) / dt * 1000); shDrag.t = now; shDrag.ly = e.clientY;
+    shY = dy > 0 ? shDrag.base + dy : shDrag.base + dy / 4;   // hacia arriba, con resistencia
+    shPaint();
+  }, { passive: false });
+  const endShDrag = (e) => {
+    if (!shDrag || e.pointerId !== shDrag.id) return;
+    const was = shDrag.on, v = shDrag.v; shDrag = null;
+    if (!was) return;
+    shV = v;
+    if (shY > shPanel.offsetHeight * 0.3 || v > 900) closeSheet(); else shSpring(0);
+  };
+  shPanel.addEventListener('pointerup', endShDrag);
+  shPanel.addEventListener('pointercancel', endShDrag);
   $('btn-settings').addEventListener('click', openSheet);
   sheet.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeSheet(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
