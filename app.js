@@ -1710,17 +1710,30 @@ function renderResult() {
   const first = stops[0];
   const slides = [
     `<div class="sl-trip">${renderTour(P)}${big.replace('class="linkbtn inline" data-go="2"', 'class="linkbtn inline" data-go="2" hidden')}
-      <a class="sl-where" href="${placeUrl(first)}" target="_blank" rel="noopener">${badge(first)}<span><b>${esc(stName(first))}</b><small>${esc(stTown(first))} · km ${fmt(first.km, 0)} · ${fmt(first.price, 3)} €/L</small></span><i aria-hidden="true">›</i></a></div>`,
-    ...ch.legs.map((lg, i) => `<div class="sl-stop">${legsHtml.split('<section class="stopA">').filter(Boolean).map((x) => '<section class="stopA">' + x)[i]}
-      <p class="why">${why}</p>
-      <div class="acts"><a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a><button type="button" class="shareA" data-share>${SHARE_SVG}Compartir</button></div></div>`),
+      <div class="sl-where">${badge(first)}<span><b>${esc(stName(first))}</b><small>${esc(stTown(first))} · km ${fmt(first.km, 0)} · ${fmt(first.price, 3)} €/L</small></span></div></div>`,
+    ...ch.legs.map((lg, i) => {
+      const c = lg.s;
+      const food = c.food && c.food.length ? `<p><b>Para comer al lado:</b> ${c.food.map((f) => `${esc(f.name)} (${fmt(f.d, 0)} m)`).join(' · ')}</p>` : '';
+      return `<div class="sl-stop"><section class="stopA">
+        <div class="st-head"><div class="st-look">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)}</p></div></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
+        <p class="st-when"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Llegas hacia las <b>${hhmm(c.eta)}</b></p>
+        <div class="st-body">${tankSVG(lg, car)}
+          <dl class="kv">
+            <div><dt>Llegas con</dt><dd>${fmt(lg.arrive, 0)} L</dd></div>
+            <div><dt>${lg.full ? 'Llenas' : 'Echas solo'}</dt><dd class="add">+${fmt(lg.L, 0)} L</dd></div>
+            <div><dt>Pagas</dt><dd>${eur(lg.pay)}</dd></div>
+            <div><dt>En una normal</dt><dd class="muted">${eur(lg.L * P.ref)}</dd></div>
+            <div><dt>Desvío</dt><dd>${c.detourMin < 0.5 ? 'ninguno' : approx(c) + mins(c.detourMin)}</dd></div>
+          </dl></div></section>
+        <div class="small-print"><p>${why}</p><p>${esc(nice(c.s[4]))}${c.s[8] ? ' · Horario ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (sin confirmar)' : ''}</p>${food}</div></div>`;
+    }),
     `<div class="sl-cmp">${renderCompare(P)}${renderTank(P)}</div>`,
     `<div class="sl-end card"><h2>Listo para salir</h2>
-      <p>Para en <b>${esc(stops.map(stName).join(' y '))}</b> (${stops.map((c) => 'km ' + fmt(c.km, 0)).join(' y ')}) y llegarás a ${esc(state.dest.name)} con unos <b>${fmt(ch.endFuel, 0)} L</b>.</p>
-      ${trip}
-      <div class="acts col"><a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a>
-      <button type="button" class="shareA big" data-share>${SHARE_SVG}Compartir el plan</button>
-      <button type="button" class="seeall" data-seeall>Ver todo el detalle</button></div></div>`,
+      <p>Para en <b>${esc(stops.map(stName).join(' y '))}</b> (${stops.map((c) => 'km ' + fmt(c.km, 0)).join(' y ')}) hacia las <b>${stops.map((c) => hhmm(c.eta)).join(' y ')}</b> y llegarás a ${esc(state.dest.name)} con unos <b>${fmt(ch.endFuel, 0)} L</b>.</p>
+      <a class="goBig" href="${gmaps(ch.stops)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c-3.9 0-7 3-7 6.9 0 5 7 12.1 7 12.1s7-7.1 7-12.1c0-3.9-3.1-6.9-7-6.9z" fill="currentColor"/><circle cx="12" cy="9.4" r="2.6" fill="var(--cta-bg)"/></svg>Ir en Google Maps</a>
+      ${stops.map((c) => `<a class="seeSt" href="${placeUrl(c)}" target="_blank" rel="noopener">${badge(c)}<span><b>Ver ${esc(stName(c))} en el mapa</b><small>${esc(nice(c.s[4]))}, ${esc(stTown(c))}</small></span><i aria-hidden="true">›</i></a>`).join('')}
+      <div class="acts"><button type="button" class="shareA" data-share>${SHARE_SVG}Compartir</button><button type="button" class="seeall" data-seeall>Ver todo el detalle</button></div>
+      <div class="small-print">${trip}</div></div>`,
   ];
   openStory(slides);
   requestAnimationFrame(() => playTour());
@@ -1763,7 +1776,9 @@ function paintStoryBar() {
   if (state.panel !== 3) return;
   const inStory = !$('story').hidden;
   $('btn-back').innerHTML = inStory && story.i > 0 ? ARROW_L + 'Anterior' : ARROW_L + 'Coche';
-  $('btn-next').innerHTML = inStory && story.i < story.n - 1 ? 'Siguiente' + ARROW_R : 'Nueva búsqueda';
+  $('btn-next').innerHTML = inStory && story.i < story.n - 1 ? (story.i === 0 ? 'Ver dónde parar' : 'Siguiente') + ARROW_R : 'Nueva búsqueda';
+  $('btn-next').classList.toggle('nudge', inStory && story.i === 0);
+  $('btn-next').classList.toggle('quiet', inStory && story.i === story.n - 1);
 }
 function closeStory() {
   // El mapa de la animación pasa a la vista completa, arriba
@@ -1851,7 +1866,7 @@ function go(i) {
     b.classList.toggle('done', k < i);
   });
   $('btn-back').hidden = i === 0;
-  $('btn-back').textContent = 'Atrás';
+  $('btn-back').textContent = 'Atrás'; $('btn-next').classList.remove('nudge', 'quiet');
   $('btn-next').textContent = NEXT_LABEL[i];
   if (i === 3 && state.plan) paintStoryBar();
   status('');

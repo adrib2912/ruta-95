@@ -708,3 +708,24 @@ a.sl-where { color: inherit; text-decoration: none; }
 .st-p { flex: none; }
 .sl-where .badge { flex: none !important; width: 44px; }
 .sl-where > span:not(.badge) { flex: 1; min-width: 0; }
+/* Hora de llegada bien visible */
+.st-when { display: flex; align-items: center; gap: 8px; margin: 14px 0 4px; padding: 10px 14px; border-radius: 14px; background: var(--blue-soft, var(--fill)); color: var(--ink); font-size: 17px; }
+.st-when svg { width: 22px; height: 22px; color: var(--blue); flex: none; }
+.st-when b { font: 700 20px var(--f-display); color: var(--blue); }
+/* Letra pequeña, al final */
+.small-print { display: flex; flex-direction: column; gap: 6px; padding: 4px 6px 0; font-size: 13px; color: var(--muted); }
+.small-print p { margin: 0; }
+.small-print .trip { font-size: 13px; }
+/* Pantalla final */
+.goBig { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 64px; border-radius: 18px; background: var(--cta-bg); color: var(--cta-ink); font: 700 20px var(--f-body); text-decoration: none; box-shadow: 0 8px 22px rgba(0,122,255,.28); }
+.goBig svg { width: 26px; height: 26px; }
+.seeSt { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--fill, var(--bg)); color: inherit; text-decoration: none; }
+.seeSt .badge { width: 40px; height: 40px; }
+.seeSt span:not(.badge) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.seeSt b { font-size: 16px; } .seeSt small { font-size: 13px; color: var(--muted); }
+.seeSt i { font-style: normal; font-size: 26px; color: var(--muted); }
+.sl-end .acts .seeall, .sl-end .acts .shareA { flex: 1 1 140px; }
+/* «Ver dónde parar»: un pequeño empujón para que se vea */
+@media (prefers-reduced-motion: no-preference) { #btn-next.nudge { animation: nudge 1.6s ease-in-out 1.2s 3; } }
+@keyframes nudge { 0%, 100% { transform: none; } 15% { transform: scale(1.04); } 30% { transform: none; } 45% { transform: scale(1.03); } }
+#btn-next.quiet { background: var(--fill, var(--line)); color: var(--blue); box-shadow: none; }
