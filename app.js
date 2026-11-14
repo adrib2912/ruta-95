@@ -955,7 +955,7 @@ const tollTxt = (r) => (r.tollKm >= 1 ? `Peaje: unos ${fmt(r.tollKm, 0)} km${r.t
 const isDark = () => {
   const skin = document.documentElement.dataset.skin;
   const th = document.documentElement.dataset.theme;
-  return skin === 'asfalto' || (!skin && (th ? th === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches));
+  return skin === 'asfalto' || ((!skin || skin === 'senal') && (th ? th === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches));
 };
 const smooth = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 function baseMap(id) {
@@ -1642,7 +1642,7 @@ function init() {
   paintTheme();
   $('btn-theme').addEventListener('click', () => {
     const r = document.documentElement, dark = isDark();
-    delete r.dataset.skin;                       // el botón usa el aspecto Señal, en claro o en oscuro
+    if (r.dataset.skin !== 'senal') delete r.dataset.skin;   // Moderno y Señal tienen claro y oscuro; los otros aspectos vuelven a Moderno
     r.dataset.theme = dark ? 'light' : 'dark';
     paintTheme(); paintSkins(); save();
     state.mapDirty = true;

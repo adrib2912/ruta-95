@@ -5,22 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Ruta 95</title>
 <meta name="description" content="Dónde repostar en tu ruta: la parada que más te ahorra contando el desvío.">
-<meta name="theme-color" content="#0B4EA2">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script>try{var d=JSON.parse(localStorage.getItem("ruta95")||"{}");if(d.skin)document.documentElement.dataset.skin=d.skin;if(d.theme)document.documentElement.dataset.theme=d.theme}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=18">
+<link rel="stylesheet" href="app.css?v=19">
 </head>
 <body>
 <main class="wrap">
 
   <header class="top">
-    <svg class="logo" viewBox="0 0 44 44" aria-hidden="true"><rect x="1.5" y="1.5" width="41" height="41" rx="10" fill="var(--sign)"/><rect x="5" y="5" width="34" height="34" rx="7" fill="none" stroke="var(--sign-line)" stroke-width="1.6"/><text x="22" y="29.5" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, Arial, sans-serif" font-weight="700" font-size="21" fill="#fff">95</text></svg>
+    <svg class="logo" viewBox="0 0 100 100" aria-hidden="true"><defs><clipPath id="sh-h"><path d="M10 9C26 3 40 4 50 12C60 4 74 3 90 9C96 30 97 50 90 66C82 84 66 92 50 98C34 92 18 84 10 66C3 50 4 30 10 9Z" transform="translate(50 52) scale(.84) translate(-50 -52)"/></clipPath></defs><path d="M10 9C26 3 40 4 50 12C60 4 74 3 90 9C96 30 97 50 90 66C82 84 66 92 50 98C34 92 18 84 10 66C3 50 4 30 10 9Z" fill="#fff" stroke="#0B1424" stroke-opacity=".22" stroke-width="2"/><g clip-path="url(#sh-h)"><rect width="100" height="100" fill="#1D4FA8"/><rect width="100" height="33" fill="#D7232C"/><rect y="33" width="100" height="3.2" fill="#fff"/></g><text x="50" y="26.5" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, Inter, Arial, sans-serif" font-weight="800" font-size="13" letter-spacing="1.2" fill="#fff">RUTA</text><text x="50" y="78" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, Inter, Arial, sans-serif" font-weight="800" font-size="42" letter-spacing="-1" fill="#fff">95</text></svg>
     <div>
       <h1>Ruta 95</h1>
       <p>Dónde repostar en tu ruta</p>
@@ -157,7 +160,8 @@
           </div>
           <p class="hint">Descuentos en céntimos por litro de tu tarjeta o app. El valor del tiempo ordena las paradas; el margen hace más prudente la autonomía.</p>
           <div class="skins" id="skins" role="group" aria-label="Aspecto">Aspecto
-            <button type="button" data-skin-btn="">Señal</button>
+            <button type="button" data-skin-btn="">Moderno</button>
+            <button type="button" data-skin-btn="senal">Señal</button>
             <button type="button" data-skin-btn="asfalto">Asfalto</button>
             <button type="button" data-skin-btn="ticket">Ticket</button>
           </div>
@@ -203,6 +207,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=18"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>

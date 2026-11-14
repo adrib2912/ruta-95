@@ -24,14 +24,14 @@
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-skin]):not([data-theme="light"]) {
+  :root[data-skin="senal"]:not([data-theme="light"]) {
     --bg: #0D141B; --surface: #17212B; --ink: #EAF0F5; --muted: #94A4B2; --line: #2A3846;
     --blue: #6AAEF7; --blue-soft: #1B2F47; --red: #FF5C61; --good: #45D088; --good-soft: #143424;
     --warn: #F2B458; --warn-soft: #3A2C12; --cta-bg: #EAF0F5; --cta-ink: #0D141B;
     color-scheme: dark;
   }
 }
-:root[data-theme="dark"]:not([data-skin]) {
+:root[data-skin="senal"][data-theme="dark"] {
     --bg: #0D141B; --surface: #17212B; --ink: #EAF0F5; --muted: #94A4B2; --line: #2A3846;
     --blue: #6AAEF7; --blue-soft: #1B2F47; --red: #FF5C61; --good: #45D088; --good-soft: #143424;
     --warn: #F2B458; --warn-soft: #3A2C12; --cta-bg: #EAF0F5; --cta-ink: #0D141B;
@@ -69,7 +69,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 
 .top { display: flex; align-items: center; gap: 12px; padding: 2px; }
-.logo { width: 38px; height: 38px; flex: none; }
+.logo { width: 40px; height: 40px; flex: none; }
 .top h1 { font: 700 28px/1 var(--f-display); letter-spacing: .01em; text-transform: uppercase; }
 .top p { color: var(--muted); font-size: 13px; margin-top: 1px; }
 
@@ -476,3 +476,87 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .hud-tank i.low { background: var(--red); }
 .replay { position: absolute; top: 10px; right: 10px; z-index: 500; display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border-radius: 18px; border: 0; background: var(--surface); color: var(--ink); font-weight: 700; font-size: 13px; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
 .tour .pin { margin-top: -30px; }
+
+/* ===== Aspecto "Moderno" (por defecto): estilo iOS, tipografía del sistema, tarjetas agrupadas y vidrio ===== */
+:root:not([data-skin]) {
+  --bg: #F2F2F7; --surface: #FFFFFF; --fill: rgba(118,118,128,.12); --ink: #1C1C1E; --muted: #6C6C70; --line: #E5E5EA;
+  --blue: #007AFF; --blue-soft: #E8F1FF; --red: #FF3B30; --good: #248A3D; --good-soft: #E4F6E8; --warn: #B25000; --warn-soft: #FFF1DE;
+  --sign: #1D4FA8; --sign-ink: #1C1C1E; --sign-line: #E5E5EA; --cta-bg: #007AFF; --cta-ink: #FFFFFF;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.05);
+  --f-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
+  --f-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
+  --r: 20px; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-skin]):not([data-theme="light"]) {
+    --bg: #000000; --surface: #1C1C1E; --fill: rgba(118,118,128,.24); --ink: #F2F2F7; --muted: #98989F; --line: #38383A;
+    --blue: #0A84FF; --blue-soft: #0F2A4A; --red: #FF453A; --good: #30D158; --good-soft: #10331C; --warn: #FF9F0A; --warn-soft: #3A2A0E;
+    --sign-ink: #F2F2F7; --sign-line: #38383A; --cta-bg: #0A84FF; --shadow: none; color-scheme: dark;
+  }
+}
+:root:not([data-skin])[data-theme="dark"] {
+  --bg: #000000; --surface: #1C1C1E; --fill: rgba(118,118,128,.24); --ink: #F2F2F7; --muted: #98989F; --line: #38383A;
+  --blue: #0A84FF; --blue-soft: #0F2A4A; --red: #FF453A; --good: #30D158; --good-soft: #10331C; --warn: #FF9F0A; --warn-soft: #3A2A0E;
+  --sign-ink: #F2F2F7; --sign-line: #38383A; --cta-bg: #0A84FF; --shadow: none; color-scheme: dark;
+}
+html:not([data-skin]) body { -webkit-font-smoothing: antialiased; letter-spacing: -.01em; }
+/* Sin mayúsculas forzadas ni tipografía estrecha */
+html:not([data-skin]) :is(.top h1, .field label, .cta, .go, .goA, .eyebrow, .card h3, .how h2, .qmid p, .gauge-ticks, .verdict > span, .kmtag, .tag, .strip-l span, .wiz button, .hito i, .dialbox .dl) { text-transform: none; letter-spacing: -.01em; }
+html:not([data-skin]) .top { padding: 6px 2px 2px; }
+html:not([data-skin]) .top h1 { font: 700 30px/1.05 var(--f-display); letter-spacing: -.02em; }
+html:not([data-skin]) .ptitle, html:not([data-skin]) .qcard .ptitle { font-weight: 700; letter-spacing: -.02em; }
+html:not([data-skin]) .qcard .ptitle { font-size: 26px; }
+/* Tarjetas agrupadas, sin bordes */
+html:not([data-skin]) :is(.card, .planA, .tile, .alts button) { border: 0; box-shadow: var(--shadow); }
+html:not([data-skin]) .card { border-radius: 22px; }
+/* La ruta: lista agrupada blanca con campos rellenos en gris */
+html:not([data-skin]) .sign { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); border-radius: 22px; padding: 18px 16px; }
+html:not([data-skin]) .field label { font: 500 13px var(--f-body); color: var(--muted); opacity: 1; }
+html:not([data-skin]) .sign input { background: var(--fill); color: var(--ink); border-radius: 12px; font: 500 17px var(--f-body); color-scheme: inherit; }
+html:not([data-skin]) .sign input::placeholder { color: var(--muted); }
+html:not([data-skin]) .iconbtn { border: 0; background: var(--blue-soft); color: var(--blue); border-radius: 12px; font-weight: 600; }
+html:not([data-skin]) .addstop { color: var(--blue); text-decoration: none; }
+html:not([data-skin]) .summary { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); border-radius: 18px; }
+html:not([data-skin]) .summary b { font-weight: 600; letter-spacing: -.01em; }
+html:not([data-skin]) .summary button { border: 0; background: var(--fill); color: var(--blue); }
+html:not([data-skin]) .check input { accent-color: var(--blue); }
+/* Botones */
+html:not([data-skin]) .cta { border-radius: 14px; font: 600 17px var(--f-body); letter-spacing: -.01em; }
+html:not([data-skin]) .back { border: 0; background: var(--fill); color: var(--blue); font-weight: 600; font-size: 17px; }
+html:not([data-skin]) :is(.go, .goA) { font: 600 17px var(--f-body); border-radius: 14px; }
+html:not([data-skin]) :is(.linkbtn, .adv summary, .breakdown summary) { color: var(--blue); text-decoration: none; }
+html:not([data-skin]) .qarrow { border: 0; background: var(--fill); color: var(--blue); }
+html:not([data-skin]) .stepper button { border: 0; background: var(--fill); color: var(--blue); font-weight: 500; }
+html:not([data-skin]) :is(.mapbtn, .sorter button, .skins button, .chip) { border: 0; background: var(--fill); }
+html:not([data-skin]) :is(.mapbtn, .sorter button, .skins button, .chip)[aria-pressed="true"], html:not([data-skin]) .chip[aria-checked="true"] { background: var(--blue); color: #fff; }
+/* Opciones: marcadas en azul suave con borde azul, como una lista de selección */
+html:not([data-skin]) .tile { border-radius: 16px; }
+html:not([data-skin]) .tile b { font: 600 18px/1.2 var(--f-body); letter-spacing: -.01em; }
+html:not([data-skin]) .tile[aria-checked="true"] { background: var(--blue-soft); color: var(--ink); box-shadow: inset 0 0 0 2px var(--blue); }
+html:not([data-skin]) .tile[aria-checked="true"] small { color: var(--muted); opacity: 1; }
+html:not([data-skin]) .alts button { border-radius: 16px; }
+html:not([data-skin]) .alts button[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--blue); }
+html:not([data-skin]) .alts b { font: 600 18px var(--f-body); }
+html:not([data-skin]) .swatches button[aria-checked="true"], html:not([data-skin]) .sw-custom.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--blue); }
+/* Control segmentado y progreso */
+html:not([data-skin]) .tabs { background: var(--fill); border-radius: 10px; padding: 2px; }
+html:not([data-skin]) .tabs button { height: 34px; border-radius: 8px; font-weight: 600; font-size: 13px; }
+html:not([data-skin]) .tabs button[aria-selected="true"] { box-shadow: 0 3px 8px rgba(0,0,0,.12), 0 1px 1px rgba(0,0,0,.04); }
+html:not([data-skin]) .wiz button { border-top-width: 3px; font: 600 13px var(--f-body); border-radius: 0; }
+html:not([data-skin]) .wiz button[aria-current="step"], html:not([data-skin]) .wiz button.done { border-color: var(--blue); }
+html:not([data-skin]) .dots i.on { background: var(--blue); } html:not([data-skin]) .dots i.done { background: var(--muted); }
+html:not([data-skin]) .steps li.active { border-color: var(--blue); }
+/* Cifras con la tipografía del sistema y números tabulares */
+html:not([data-skin]) :is(.unit input, .stepper input, .dialbox output, .gauge output, .price b, .amt b, .kmtag b, .stats b, .cmpv b, .hud-r b, .verdict b) { font-family: var(--f-display); font-weight: 700; letter-spacing: -.02em; }
+html:not([data-skin]) .stepper input { font-size: 30px; }
+html:not([data-skin]) .hero-n { font: 700 60px/1 var(--f-display); letter-spacing: -.035em; }
+html:not([data-skin]) .planA { border-radius: 24px; }
+html:not([data-skin]) .stats div { background: var(--fill); }
+html:not([data-skin]) .badge { border-radius: 12px; font-family: var(--f-display); }
+/* Barra inferior de vidrio */
+html:not([data-skin]) .bar { background: color-mix(in srgb, var(--bg) 78%, transparent); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-top: .5px solid var(--line); }
+html:not([data-skin]) .hud { -webkit-backdrop-filter: saturate(180%) blur(16px); backdrop-filter: saturate(180%) blur(16px); }
+html:not([data-skin]) .map, html:not([data-skin]) #map, html:not([data-skin]) .tourmap { border-radius: 16px; }
+html:not([data-skin]) .note { border-radius: 14px; }
+html:not([data-skin]) .sugg { border: 0; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.14); }
+html:not([data-skin]) .sugg li:hover { background: var(--fill); }
