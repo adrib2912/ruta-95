@@ -84,6 +84,15 @@ with sync_playwright() as p:
         for k in range(n):
             pg.screenshot(path=f'{OUT}/s{k}-{scheme}.png', full_page=True)
             if k < n - 1: pg.click('.st-next'); pg.wait_for_timeout(500)
+        # Navegación: Atrás recorre las pantallas; ir al coche y volver sin recalcular
+        pg.click('#btn-back'); pg.wait_for_timeout(300); a = pg.evaluate('()=>story.i')
+        pg.click('[data-go="2"]'); pg.wait_for_timeout(400); q = pg.evaluate('()=>QS[state.q]'); lbl = pg.inner_text('#btn-next')
+        pg.screenshot(path=f'{OUT}/tucoche-{scheme}.png')
+        pg.click('#btn-mycar-ok'); pg.wait_for_timeout(300)
+        while pg.evaluate('()=>state.panel') == 2:
+            pg.click('#btn-next'); pg.wait_for_timeout(400)
+        print('nav: atras->pantalla', a, '| coche empieza en', q, '| boton', repr(lbl), '| vuelve a panel', pg.evaluate('()=>state.panel'), 'cargando', pg.is_visible('#loading'), 'pantalla', pg.evaluate('()=>story.i'))
+        pg.evaluate('()=>showSlide(story.n-1)'); pg.wait_for_timeout(300)
         pg.click('[data-seeall]'); pg.wait_for_selector('.planA', state='visible'); pg.wait_for_timeout(600)
         print('mapa movido', pg.evaluate("()=>!!document.querySelector('#strip .tour')"))
         pg.screenshot(path=f'{OUT}/w4-{scheme}.png', full_page=True)

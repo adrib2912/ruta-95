@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script>try{var d=JSON.parse(localStorage.getItem("ruta95")||"{}");if(d.skin)document.documentElement.dataset.skin=d.skin;if(d.theme)document.documentElement.dataset.theme=d.theme}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=29">
+<link rel="stylesheet" href="app.css?v=30">
 </head>
 <body>
 <main class="wrap">
@@ -145,6 +145,14 @@
         <p class="hint">Los restaurantes salen de OpenStreetMap: puede faltar alguno.</p>
       </section>
 
+      <section class="qcard card" data-q="tucoche" hidden>
+        <h2 class="ptitle">¿Vas con tu coche de siempre?</h2>
+        <div class="mycar"><span class="veh mycar-pic"></span><div><b id="mycar-name"></b><small id="mycar-sub"></small></div></div>
+        <div class="stepper"><label for="consumo2">Consumo en este viaje</label>
+          <div><button type="button" data-step="consumo2:-0.1" aria-label="Menos consumo">−</button><input id="consumo2" type="number" inputmode="decimal" step="0.1" min="2" max="25" value="5.8"><button type="button" data-step="consumo2:0.1" aria-label="Más consumo">+</button></div><span>L/100 km</span></div>
+        <p class="hint">Súbelo si vas cargada, por montaña o más rápido de lo normal.</p>
+        <div class="acts col"><button type="button" class="cta" id="btn-mycar-ok">Sí, es este</button><button type="button" class="seeall" id="btn-mycar-change">Cambiar de coche</button></div>
+      </section>
       <section class="qcard card" data-q="nivel" hidden>
         <h2 class="ptitle">¿Cuánto llevas ahora?</h2>
         <div class="dialbox"><div id="dial"></div><output id="nivel-out" for="nivel"></output></div>
@@ -221,6 +229,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=29"></script>
+<script src="app.js?v=30"></script>
 </body>
 </html>

@@ -771,13 +771,13 @@ const DETOURS = [
   { k: 'short', n: 'Un desvío corto', d: 'Hasta unos 6 minutos', corridor: 4, max: 6 },
   { k: 'any', n: 'Lo que haga falta', d: 'Si el ahorro lo compensa', corridor: 8, max: Infinity },
 ];
-const Q_ALL = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'comida', 'nivel'];
-const Q_NAMES = { coche: 'Tu coche', fuel: 'Combustible', nums: 'Consumo y depósito', umbral: 'Cuándo repostar', desvio: 'Desvío', comida: 'Comida', nivel: 'Depósito ahora' };
+const Q_ALL = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'tucoche', 'comida', 'nivel'];
+const Q_NAMES = { tucoche: 'Tu coche guardado', coche: 'Tu coche', fuel: 'Combustible', nums: 'Consumo y depósito', umbral: 'Cuándo repostar', desvio: 'Desvío', comida: 'Comida', nivel: 'Depósito ahora' };
 let QS = Q_ALL.filter((q) => q !== 'comida');
 const currentMeal = () => (state.routes && state.routes[state.alt] ? mealWindow(state.routes[state.alt], readDepart()) : null);
 // Quien ya rellenó el coche empieza en lo que cambia en cada viaje: la comida (si toca) y el depósito
-const shortcutStart = () => (QS.includes('comida') ? QS.indexOf('comida') : QS.length - 1);
-const buildQS = () => { QS = Q_ALL.filter((q) => q !== 'comida' || currentMeal()); };
+const shortcutStart = () => (QS.includes('tucoche') ? QS.indexOf('tucoche') : QS.includes('comida') ? QS.indexOf('comida') : QS.length - 1);
+const buildQS = () => { QS = Q_ALL.filter((q) => (q !== 'comida' || currentMeal()) && (q !== 'tucoche' || (state.carDone && !state.editing))); };
 const PUMP_SVG = '<svg viewBox="0 0 24 30" aria-hidden="true"><rect x="3" y="3" width="13" height="24" rx="2" fill="var(--red)"/><rect x="5.5" y="6" width="8" height="7" rx="1" fill="#fff"/><rect x="1" y="26" width="17" height="3" rx="1" fill="var(--ink)"/><path d="M16 12h2.5q2 0 2 2v8q0 1.5 1.2 1.5T23 22V11l-3-3" fill="none" stroke="var(--ink)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const FLAG_SVG = '<svg viewBox="0 0 20 26" aria-hidden="true"><path d="M4 2v23" stroke="var(--ink)" stroke-width="2" stroke-linecap="round"/><path d="M5 3h12l-3 4 3 4H5z" fill="var(--ink)"/></svg>';
 const carType = () => CAR_TYPES.find((c) => c.k === state.car.type) || CAR_TYPES[1];
@@ -1017,8 +1017,14 @@ function showQ(i, dir = 1) {
   $('q-step').textContent = `${i + 1} de ${QS.length} · ${Q_NAMES[QS[i]]}`;
   $('q-prev').disabled = i === 0;
   $('q-next').disabled = i === QS.length - 1;
-  $('btn-next').textContent = i < QS.length - 1 ? 'Siguiente' : 'Buscar mi parada';
+  $('btn-next').textContent = i < QS.length - 1 ? 'Siguiente' : state.plan && state.planSig === planSig() ? 'Ver mi parada' : 'Buscar mi parada';
   $('btn-editcar').hidden = !(state.carDone && !state.editing);
+  if (QS[i] === 'tucoche') {
+    const t = carType(), fuelName = FUELS.find((f) => f.k === state.fuel).n;
+    $('mycar-name').textContent = t.n;
+    $('mycar-sub').textContent = `${fuelName} · depósito de ${fmt(readCar().tank, 0)} L`;
+    $('consumo2').value = (parseFloat($('consumo').value) || t.cons).toFixed(1);
+  }
   if (QS[i] === 'coche') start3D(); else stop3D();
   updateGauge();
   window.scrollTo({ top: 0, behavior: 'auto' });
@@ -1547,11 +1553,18 @@ function renderTank(P) {
 
 
 /* Insignia genérica de la gasolinera: su inicial sobre un color estable (no son los logos de las marcas). */
-const BADGE_COLORS = ['#0B4EA2', '#0B7F45', '#B4232B', '#A85F00', '#5B3FA0', '#13798A', '#3A3F45'];
+/* Insignia de la gasolinera: surtidor sobre el color de la marca (o un gris azulado si no es de las grandes) */
+const BRAND_COLORS = [
+  [/REPSOL|CAMPSA|PETRONOR/i, '#F26B21'], [/MOEVE/i, '#0A7E8C'], [/CEPSA/i, '#D7232C'], [/(^|[^A-Z])BP([^A-Z]|$)/i, '#007F3E'],
+  [/SHELL/i, '#FFD200', '#D7232C'], [/GALP/i, '#F06A1E'], [/CARREFOUR/i, '#1C4FA1'], [/ALCAMPO|AUCHAN/i, '#E3001B'],
+  [/BALLENOIL/i, '#0072BC'], [/PLENERGY/i, '#1F8A4C'], [/PETROPRIX/i, '#6A2C91'], [/AVIA/i, '#D9261C'],
+];
+const BADGE_PUMP = (c) => `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="10" height="17" rx="2" fill="${c}"/><rect x="6" y="5.5" width="6" height="4.5" rx="1" fill="currentColor" opacity=".9"/><rect x="2.5" y="19" width="13" height="2.5" rx="1" fill="${c}"/><path d="M14 9h1.6q1.4 0 1.4 1.4v5.1q0 1.2 1.1 1.2t1.1-1.2V8.2L17.2 6" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function badge(c) {
-  const name = stName(c), ch0 = (name.replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9]/g, '')[0] || 'G').toUpperCase();
-  let h = 0; for (const k of name) h = (h * 31 + k.charCodeAt(0)) >>> 0;
-  return `<span class="badge" style="background:${BADGE_COLORS[h % BADGE_COLORS.length]}" aria-hidden="true">${ch0}</span>`;
+  const name = (c.s && c.s[3]) || stName(c);
+  const b = BRAND_COLORS.find((x) => x[0].test(name));
+  const bg = b ? b[1] : '#5B6B7C', fg = b && b[2] ? b[2] : '#fff';
+  return `<span class="badge" style="background:${bg};color:${bg}" aria-hidden="true">${BADGE_PUMP(fg)}</span>`;
 }
 /* Depósito dibujado: azul lo que traes, verde lo que echas, raya roja tu límite. */
 let tankSeq = 0;
@@ -1868,6 +1881,8 @@ async function stepRoute() {
   } catch (e) { busy(false); fail(e); }
 }
 
+/* Lo que decide el plan: si no cambia, no hace falta recalcular al volver */
+const planSig = () => JSON.stringify([state.alt, state.fuel, readCar(), $('salida').value, state.discounts, state.routes && state.routes[state.alt] && state.routes[state.alt].distKm]);
 async function stepCompute() {
   go(3);
   $('loading').hidden = false; $('result').hidden = true;
@@ -1889,6 +1904,7 @@ async function stepCompute() {
     if (food) { progress(2); await food; }
     progress(STEP_NAMES().length - 1);
     solve(P);
+    state.planSig = planSig();
     renderResult();
     busy(false);
     status(measured ? '' : 'No he podido medir los desvíos exactos: los minutos son aproximados.');
@@ -1913,11 +1929,14 @@ function init() {
     else if (state.panel === 1) go(2);
     else if (state.panel === 2) {
       if (state.q < QS.length - 1) showQ(state.q + 1, 1);
+      else if (state.plan && state.planSig === planSig()) go(3);   // nada ha cambiado: se vuelve al resultado tal cual
       else { state.carDone = true; state.editing = false; save(); stepCompute(); }
     }
+    else if (!$('story').hidden && story.i < story.n - 1) showSlide(story.i + 1);
     else { state.maxPanel = 0; go(0); }
   });
   $('btn-back').addEventListener('click', () => {
+    if (state.panel === 3 && !$('story').hidden && story.i > 0) return showSlide(story.i - 1);
     if (state.panel === 2 && state.q > (state.carDone && !state.editing ? shortcutStart() : 0)) return showQ(state.q - 1, -1);
     go(Math.max(0, state.panel - 1));
   });
@@ -1972,6 +1991,9 @@ function init() {
   $('deck').addEventListener('input', onPick);
   $('deck').addEventListener('change', onPick);
   $('comida').addEventListener('click', (e) => { const b = e.target.closest('[data-eat]'); if (b) { state.eat = b.dataset.eat; updateGauge(); save(); auto(); } });
+  $('consumo2').addEventListener('input', () => { const v = parseFloat($('consumo2').value); if (v > 0) { $('consumo').value = v.toFixed(1); updateGauge(); save(); } });
+  $('btn-mycar-ok').addEventListener('click', () => showQ(state.q + 1, 1));
+  $('btn-mycar-change').addEventListener('click', () => { state.editing = true; buildQS(); showQ(0, -1); });
   $('q-prev').addEventListener('click', () => { if (state.q > 0) showQ(state.q - 1, -1); });
   $('q-next').addEventListener('click', () => { if (state.q < QS.length - 1) showQ(state.q + 1, 1); });
   // Deslizar para pasar de tarjeta (menos sobre el coche 3D, la aguja y las barras)
@@ -2007,11 +2029,12 @@ function init() {
     if (st) {
       const [id, d] = st.dataset.step.split(':'), el = $(id);
       const v = Math.min(+el.max, Math.max(+el.min, (parseFloat(el.value) || 0) + +d));
-      el.value = id === 'consumo' ? v.toFixed(1) : String(Math.round(v));
+      el.value = id.startsWith('consumo') ? v.toFixed(1) : String(Math.round(v));
+      if (id === 'consumo2') $('consumo').value = el.value;
       updateGauge(); save(); return;
     }
     if (e.target.closest('#btn-tipico')) { const t = carType(); $('consumo').value = t.cons.toFixed(1); $('deposito').value = t.tank; updateGauge(); save(); return; }
-    if (e.target.closest('#btn-editcar')) { state.editing = true; showQ(0, -1); }
+    if (e.target.closest('#btn-editcar')) { state.editing = true; buildQS(); showQ(0, -1); }
   });
   $('discounts').addEventListener('input', (e) => {
     const k = e.target.dataset.brand;

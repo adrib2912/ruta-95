@@ -675,3 +675,16 @@ body.locked { overflow: hidden; }
 .seeall { min-height: 50px; border: 0; border-radius: 14px; background: var(--fill, var(--line)); color: var(--ink); font: 600 17px var(--f-body); }
 .restory { display: block; margin: 0 auto 10px; }
 .acts.col > * { flex: none; }
+/* Insignia: surtidor centrado */
+.badge { display: grid; place-items: center; padding: 0; flex: none; }
+.badge svg { width: 60%; height: 60%; display: block; }
+.sl-where .badge { width: 44px; height: 44px; }
+/* Tarjeta del coche guardado */
+.mycar { display: flex; align-items: center; gap: 14px; background: var(--fill, var(--bg)); border-radius: 16px; padding: 12px 14px; margin-bottom: 14px; }
+.mycar-pic { width: 110px; flex: none; }
+.mycar-pic svg { width: 100%; height: auto; display: block; }
+.mycar b { display: block; font: 700 20px var(--f-display); }
+.mycar small { color: var(--muted); font-size: 14px; }
+[data-q="tucoche"] .acts { margin-top: 16px; }
+[data-q="tucoche"] .cta { width: 100%; }
+.mycar .mycar-pic { position: static; inset: auto; left: auto; bottom: auto; transform: none; animation: none; width: 110px; height: auto; }
