@@ -79,7 +79,13 @@ with sync_playwright() as p:
             pg.screenshot(path=f'{OUT}/q{shots}-{scheme}.png')
         box=pg.locator('#dial svg').bounding_box(); pg.mouse.move(box['x']+box['width']*0.5, box['y']+box['height']*0.85); pg.mouse.down(); pg.mouse.move(box['x']+box['width']*0.78, box['y']+box['height']*0.2, steps=5); pg.mouse.up()
         if scheme=='light': print('QS', pg.evaluate('()=>QS.join(",")'), '| nivel tras arrastrar', pg.evaluate("()=>document.getElementById('nivel').value"), '| 3d', pg.evaluate('()=>car3d.ok'))
-        pg.click('#btn-next'); pg.wait_for_selector('.planA', timeout=20000); pg.wait_for_timeout(1800)
+        pg.click('#btn-next'); pg.wait_for_selector('.slide.on', timeout=20000); pg.wait_for_timeout(1800)
+        n = pg.locator('.slide').count(); print('pantallas', n)
+        for k in range(n):
+            pg.screenshot(path=f'{OUT}/s{k}-{scheme}.png', full_page=True)
+            if k < n - 1: pg.click('.st-next'); pg.wait_for_timeout(500)
+        pg.click('[data-seeall]'); pg.wait_for_selector('.planA', state='visible'); pg.wait_for_timeout(600)
+        print('mapa movido', pg.evaluate("()=>!!document.querySelector('#strip .tour')"))
         pg.screenshot(path=f'{OUT}/w4-{scheme}.png', full_page=True)
         if scheme=='light':
             print('sugg', sug, '| alts', alts); print(pg.evaluate(DUMP))
@@ -90,6 +96,6 @@ with sync_playwright() as p:
             for _ in range(4):
                 if pg.locator('#btn-next').inner_text().strip().lower() in ('nueva búsqueda','calculando…'): break
                 pg.click('#btn-next'); pg.wait_for_timeout(500)
-            pg.wait_for_selector('.planA'); pg.wait_for_timeout(1500); print(pg.evaluate(DUMP))
+            pg.wait_for_selector('.slide.on'); pg.wait_for_timeout(1500); pg.click('[data-seeall]') if False else None; print(pg.evaluate(DUMP))
         print(scheme,'errors:',errs)
     b.close()

@@ -1390,6 +1390,7 @@ function playTour() {
     tour.map = map; return;
   }
   const frame = (now) => {
+    if (!tour.map || !tour.map.getContainer().offsetParent) return;   // mapa oculto: no se anima
     const st = steps[si];
     if (!st) { hud(P.D, ch.endFuel, `Llegas a ${state.dest.name} con ${fmt(ch.endFuel, 0)} L`); map.dragging.enable(); map.touchZoom.enable(); return; }
     const k = Math.min(1, (now - t0) / st.ms);
@@ -1606,7 +1607,7 @@ function renderResult() {
     showTab('plan'); return;
   }
   $('tabs').hidden = false;
-  $('strip').innerHTML = renderTour(P);
+  $('strip').innerHTML = '';
   const warns = [];
   if (P.outOfReach) warns.push(`Con lo que llevas no llegas a ninguna gasolinera de la ruta sin bajar de ${fmt(car.reserve, 0)} L. Reposta cuanto antes: estas son las primeras que encontrarás.`);
   if (P.incomplete && !P.outOfReach) warns.push('El viaje pide más de dos repostajes. Esta es la mejor primera parada; vuelve a calcular desde allí.');
@@ -1668,7 +1669,7 @@ function renderResult() {
       ${big}
       ${legsHtml}
       <p class="why">${why} Llegarás a ${esc(state.dest.name)} con unos <b>${fmt(ch.endFuel, 0)} L</b>.</p>
-      <a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a>
+      <div class="acts"><a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a><button type="button" class="shareA" data-share>${SHARE_SVG}Compartir</button></div>
       <details class="breakdown"><summary>Cómo sale la cuenta</summary>
         <dl class="rows">
           <div><dt>${fmt(ch.litres, 0)} L en tu parada</dt><dd>${eur(ch.pay)}</dd></div>
@@ -1684,16 +1685,84 @@ function renderResult() {
     ${trip}<div class="infos">${infos.map((t) => `<p>${t}</p>`).join('')}<button type="button" class="linkbtn" id="btn-here">Ya estoy en ruta: recalcular desde donde estoy</button></div>`;
   $('t-precios').innerHTML = renderChart(P);
   $('t-otras').innerHTML = renderList(P);
+  $('t-plan').insertAdjacentHTML('afterbegin', '<button type="button" class="linkbtn restory" data-restory>Ver el resumen paso a paso</button>');
   state.mapDirty = true;
   showTab('plan');
+  // Resumen por pantallas: viaje y ahorro, cada parada, la comparación y el final con todo el detalle
+  const first = stops[0];
+  const slides = [
+    `<div class="sl-trip">${renderTour(P)}${big.replace('class="linkbtn inline" data-go="2"', 'class="linkbtn inline" data-go="2" hidden')}
+      <p class="sl-where">${badge(first)}<span><b>${esc(stName(first))}</b><small>${esc(stTown(first))} · km ${fmt(first.km, 0)} · ${fmt(first.price, 3)} €/L</small></span></p></div>`,
+    ...ch.legs.map((lg, i) => `<div class="sl-stop">${legsHtml.split('<section class="stopA">').filter(Boolean).map((x) => '<section class="stopA">' + x)[i]}
+      <p class="why">${why}</p>
+      <div class="acts"><a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a><button type="button" class="shareA" data-share>${SHARE_SVG}Compartir</button></div></div>`),
+    `<div class="sl-cmp">${renderCompare(P)}${renderTank(P)}</div>`,
+    `<div class="sl-end card"><h2>Listo para salir</h2>
+      <p>Para en <b>${esc(stops.map(stName).join(' y '))}</b> (${stops.map((c) => 'km ' + fmt(c.km, 0)).join(' y ')}) y llegarás a ${esc(state.dest.name)} con unos <b>${fmt(ch.endFuel, 0)} L</b>.</p>
+      ${trip}
+      <div class="acts col"><a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a>
+      <button type="button" class="shareA big" data-share>${SHARE_SVG}Compartir el plan</button>
+      <button type="button" class="seeall" data-seeall>Ver todo el detalle</button></div></div>`,
+  ];
+  openStory(slides);
   requestAnimationFrame(() => playTour());
   // El ahorro se cuenta hacia arriba al aparecer
-  const el = document.querySelector('.count');
-  if (el && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  document.querySelectorAll('.count').forEach((el) => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const to = +el.dataset.to, t0 = performance.now();
     const tick = (now) => { const k = Math.min(1, Math.max(0, (now - t0) / 800)), e = 1 - Math.pow(1 - k, 3); el.textContent = eur(to * e); if (k < 1) requestAnimationFrame(tick); };
     requestAnimationFrame(tick);
-  }
+  });
+}
+
+/* ---------- Resumen por pantallas ---------- */
+const SHARE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11H6.5A2.5 2.5 0 0 0 4 13.5v5A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-5a2.5 2.5 0 0 0-2.5-2.5H16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+const story = { i: 0, n: 0, dir: 1 };
+function openStory(slides) {
+  const el = $('story');
+  story.n = slides.length; story.i = 0;
+  el.innerHTML = `<div class="st-track">${slides.map((h, i) => `<section class="slide" data-i="${i}" aria-roledescription="pantalla" aria-label="${i + 1} de ${slides.length}">${h}</section>`).join('')}</div>
+    <div class="st-nav"><button type="button" class="st-prev" aria-label="Anterior"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="st-dots">${slides.map(() => '<i></i>').join('')}</div>
+      <button type="button" class="st-next">Siguiente<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`;
+  el.hidden = false;
+  $('result').classList.add('in-story');
+  showSlide(0);
+}
+function showSlide(i) {
+  const el = $('story');
+  story.dir = i >= story.i ? 1 : -1; story.i = Math.max(0, Math.min(story.n - 1, i));
+  el.querySelectorAll('.slide').forEach((s, k) => { s.classList.toggle('on', k === story.i); s.classList.toggle('back', story.dir < 0); });
+  el.querySelectorAll('.st-dots i').forEach((d, k) => d.classList.toggle('on', k === story.i));
+  el.querySelector('.st-prev').disabled = story.i === 0;
+  el.querySelector('.st-next').hidden = story.i === story.n - 1;
+  // La animación solo corre a la vista: se para al salir de la primera pantalla y empieza de nuevo al volver
+  if (story.i !== 0) { cancelAnimationFrame(tour.raf); if (tour.map) tour.map.stop(); }
+  else if (story.dir < 0 && tour.map) { tour.map.invalidateSize(); playTour(); }
+  if (story.i > 0) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function closeStory() {
+  // El mapa de la animación pasa a la vista completa, arriba
+  const tourCard = $('story').querySelector('.tour');
+  if (tourCard) $('strip').appendChild(tourCard);
+  $('story').hidden = true; $('story').innerHTML = '';
+  $('result').classList.remove('in-story');
+  if (tour.map) setTimeout(() => { tour.map.invalidateSize(); playTour(); }, 60);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+async function sharePlan() {
+  const P = state.plan; if (!P || !P.chosen) return;
+  const ch = P.chosen;
+  const lines = [`Ruta 95 · ${state.origin.name} → ${state.dest.name}`,
+    ...ch.legs.map((lg) => `⛽ ${stName(lg.s)} (${stTown(lg.s)}), km ${fmt(lg.s.km, 0)}, hacia las ${hhmm(lg.s.eta)} · ${fmt(lg.s.price, 3)} €/L · echar ${fmt(lg.L, 0)} L (${eur(lg.pay)})`),
+    ch.net > 0.005 ? `Ahorro: unos ${eur(ch.net)} frente a una gasolinera normal de carretera.` : '',
+    P.route.tollKm >= 1 && tollOf(P.route).eur >= 0.05 ? `Peaje estimado: unos ${eurR(tollOf(P.route).eur)}.` : ''].filter(Boolean);
+  const url = gmaps(ch.stops), text = lines.join('\n');
+  try {
+    if (navigator.share) { await navigator.share({ title: 'Mi plan de Ruta 95', text, url }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(text + '\n' + url); status('Plan copiado: pégalo en WhatsApp, en Notas o donde quieras.'); }
+  catch (_) { window.prompt('Copia tu plan:', text + '\n' + url); }
 }
 
 function renderMap() {
@@ -2003,6 +2072,24 @@ function init() {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
   $('strip').addEventListener('click', (e) => { if (e.target.closest('#btn-replay')) playTour(); });
   $('t-plan').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) { e.preventDefault(); go(+b.dataset.go); } });
+  $('story').addEventListener('click', (e) => {
+    if (e.target.closest('.st-next')) showSlide(story.i + 1);
+    else if (e.target.closest('.st-prev')) showSlide(story.i - 1);
+    else if (e.target.closest('[data-seeall]')) closeStory();
+    else if (e.target.closest('#btn-replay')) playTour();
+  });
+  // Deslizar entre pantallas (sin estorbar al mapa de la animación)
+  let stX = null, stY = 0;
+  $('story').addEventListener('pointerdown', (e) => { if (e.target.closest('.leaflet-container')) return; stX = e.clientX; stY = e.clientY; });
+  $('story').addEventListener('pointerup', (e) => {
+    if (stX == null) return; const dx = e.clientX - stX, dy = e.clientY - stY; stX = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) showSlide(story.i + (dx < 0 ? 1 : -1));
+  });
+  document.addEventListener('keydown', (e) => { if ($('story').hidden || state.panel !== 3) return; if (e.key === 'ArrowRight') showSlide(story.i + 1); if (e.key === 'ArrowLeft') showSlide(story.i - 1); });
+  $('p3').addEventListener('click', (e) => {
+    if (e.target.closest('[data-share]')) sharePlan();
+    else if (e.target.closest('[data-restory]') && state.plan) renderResult();
+  });
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
   $('p3').addEventListener('click', async (e) => {
     const sortBtn = e.target.closest('[data-sort]');
