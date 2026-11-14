@@ -789,8 +789,7 @@ function applyModel(m) {
 const CAR_COLORS = ['#F4F4F2', '#C3C7CC', '#7D848C', '#3A3F45', '#16181B', '#D8C3A0', '#6E4B32', '#7A1F2B', '#D5202A', '#F07F1F', '#F2C200', '#8CC63F', '#2E7D4F', '#18A0A8', '#5AA9E6', '#1F5FBF', '#1B2E5A', '#6B3FA0', '#E86AA6'];
 const ROOF_COLORS = ['', '#16181B', '#F4F4F2', '#3A3F45', '#C3C7CC', '#D5202A', '#1F5FBF'];
 const HEX = /^#[0-9a-f]{6}$/i;
-const OPT_F = 0.08;
-const THRESHOLDS = [{ f: OPT_F, n: 'Lo más barato posible', d: 'Apuro el depósito, paro cuando sea y me desvío si compensa' }, { f: 0.12, n: 'En reserva', d: 'Apuro el depósito' }, { f: 0.25, n: 'A un cuarto', d: 'Lo habitual' }, { f: 1 / 3, n: 'A un tercio', d: 'Con margen' }, { f: 0.5, n: 'A medio depósito', d: 'No me la juego' }];
+const THRESHOLDS = [{ f: 0.12, n: 'En reserva', d: 'Apuro el depósito' }, { f: 0.25, n: 'A un cuarto', d: 'Lo habitual' }, { f: 1 / 3, n: 'A un tercio', d: 'Con margen' }, { f: 0.5, n: 'A medio depósito', d: 'No me la juego' }];
 const DETOURS = [
   { k: 'road', n: 'Solo a pie de carretera', d: 'Sin salir de mi ruta', corridor: 1.2, max: 2.5 },
   { k: 'short', n: 'Un desvío corto', d: 'Hasta unos 6 minutos', corridor: 4, max: 6 },
@@ -941,11 +940,11 @@ function build3D() {
 function makeCarGroup(T) {
   const t = carType(), p = carProfile(t, 96), paint = state.car.color, roofC = state.car.roof || state.car.color;
   const grp = new T.Group();
-  const shell = new T.MeshStandardMaterial({ vertexColors: true, metalness: 0.25, roughness: 0.34 });
+  const shell = new T.MeshPhysicalMaterial({ vertexColors: true, metalness: 0.3, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.12 });
   const TRIM = '#23272c', GLASS = '#16222e';
   // Carrocería: faldón inferior oscuro (más alto en el SUV)
   grp.add(new T.Mesh(loft(T, p.xs, (i) => ({ yb: p.bot[i], yt: p.H[i], hwb: p.hw[i] * 0.95, hwt: p.hw[i] * 0.97 }),
-    (i, u, v) => (v < (t.clad ? -0.45 : -0.86) ? TRIM : paint), 0.3, 0.1), shell));
+    (i, u, v) => (v < (t.clad ? -0.45 : -0.86) ? TRIM : paint), 0.34, 0.2), shell));
   // Cabina: cristal, con techo y pilares del color de la carrocería
   const ci = p.xs.map((x, i) => i).filter((i) => p.R[i] > p.H[i] + 0.004);
   const mid = (t.rr + t.rf) / 2 - 0.1;
@@ -955,8 +954,8 @@ function makeCarGroup(T) {
       if (v > 0.8 && x > t.rr - 0.08 && x < t.rf + 0.08) return roofC;                 // techo
       if (side && (x > t.rf - 0.04 || x < t.rr + 0.06 || Math.abs(x - mid) < 0.06)) return roofC; // pilares A, B y C
       if (v < -0.72) return paint;
-      return GLASS;
-    }, 0.4, 0.22), shell));
+      return v > 0.35 ? '#0B141D' : v > -0.2 ? '#14222F' : '#1E3346';   // cristal: más oscuro arriba
+    }, 0.42, 0.26), shell));
   const dark = new T.MeshStandardMaterial({ color: 0x14171a, roughness: 0.9 });
   const rim = new T.MeshStandardMaterial({ color: 0xc8cdd3, metalness: 0.7, roughness: 0.3 });
   const trim = new T.MeshStandardMaterial({ color: 0x23272c, roughness: 0.7 });
@@ -965,20 +964,44 @@ function makeCarGroup(T) {
     const z = sz * (p.hw[at(wx)] * 0.95 - 0.03);
     const tyre = new T.Mesh(new T.CylinderGeometry(t.r, t.r, 0.2, 32), dark); tyre.rotation.x = Math.PI / 2; tyre.position.set(wx, t.r, z); grp.add(tyre);
     const wall = new T.Mesh(new T.TorusGeometry(t.r - 0.045, 0.05, 10, 32), dark); wall.position.set(wx, t.r, z + sz * 0.09); grp.add(wall);
+    const barrel = new T.Mesh(new T.CylinderGeometry(t.r * 0.62, t.r * 0.62, 0.04, 28), new T.MeshStandardMaterial({ color: 0x3a3f45, metalness: 0.5, roughness: 0.5 }));
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(wx, t.r, z + sz * 0.085); grp.add(barrel);
     const disc = new T.Mesh(new T.CylinderGeometry(t.r * 0.66, t.r * 0.66, 0.05, 28), rim); disc.rotation.x = Math.PI / 2; disc.position.set(wx, t.r, z + sz * 0.1); grp.add(disc);
     for (let s = 0; s < 5; s++) { const sp = new T.Mesh(new T.BoxGeometry(t.r * 0.5, 0.045, 0.02), dark); sp.position.set(wx, t.r, z + sz * 0.13); sp.rotation.z = (s * 2 * Math.PI) / 5 + 0.3; sp.translateX(t.r * 0.34); grp.add(sp); }
     const cap = new T.Mesh(new T.CylinderGeometry(t.r * 0.16, t.r * 0.16, 0.07, 16), rim); cap.rotation.x = Math.PI / 2; cap.position.set(wx, t.r, z + sz * 0.11); grp.add(cap);
     const arch = new T.Mesh(new T.TorusGeometry(t.r + 0.055, 0.04, 8, 28, Math.PI), trim); arch.position.set(wx, t.r, z + sz * 0.075); grp.add(arch);
   }
   const lamp = (x, y, color, zf, sx) => { for (const sz of [-1, 1]) { const m = new T.Mesh(new T.SphereGeometry(1, 16, 12), new T.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.65, roughness: 0.2 })); m.scale.set(sx, 0.06, 0.17); m.position.set(x, y, sz * p.hw[at(x)] * zf); grp.add(m); } };
-  lamp(p.h - 0.12, t.nose - 0.12, 0xfff3cf, 0.74, 0.08);
-  lamp(-p.h + 0.07, (t.deck ? t.belt - 0.12 : t.belt - 0.08), 0xd5202a, 0.74, 0.07);
+  const lampMat = (c, e) => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: e, roughness: 0.15, metalness: 0.1 });
+  const headM = lampMat(0xfff7e0, 0.9), tailM = lampMat(0xe0242c, 0.85);
+  for (const sz of [-1, 1]) {
+    const hl = new T.Mesh(new T.BoxGeometry(0.08, 0.075, 0.32), headM);
+    hl.position.set(p.h - 0.09, t.nose - 0.1, sz * p.hw[at(p.h - 0.09)] * 0.68); hl.rotation.y = sz * 0.35; grp.add(hl);
+  }
+  const ty = p.H[at(-p.h + 0.08)] - 0.1;   // a la altura real de la trasera
+  const tl = new T.Mesh(new T.BoxGeometry(0.09, 0.07, p.hw[at(-p.h + 0.12)] * 1.6), tailM);   // franja de pilotos de lado a lado
+  tl.position.set(-p.h + 0.02, ty, 0); grp.add(tl);
   const box = (sx, sy, sz, x, y, z, mat) => { const m = new T.Mesh(new T.BoxGeometry(sx, sy, sz), mat); m.position.set(x, y, z); grp.add(m); return m; };
   box(0.06, 0.16, t.w * 0.42, p.h - 0.035, t.nose - 0.36, 0, trim);                                    // calandra
   box(0.03, 0.11, 0.5, -p.h + 0.02, t.gc + 0.32, 0, new T.MeshStandardMaterial({ color: 0xf4f4f0, roughness: 0.6 })); // matrícula
   const body = new T.MeshStandardMaterial({ color: paint, metalness: 0.25, roughness: 0.34 });
   const mirror = new T.MeshStandardMaterial({ color: roofC, metalness: 0.25, roughness: 0.34 });
   for (const sz of [-1, 1]) box(0.14, 0.09, 0.16, t.wind - 0.12, p.H[at(t.wind)] + 0.07, sz * (p.hw[at(t.wind)] * 0.93 + 0.07), mirror); // retrovisores
+  const seam = new T.MeshStandardMaterial({ color: 0x000000, transparent: true, opacity: 0.35, roughness: 1 });
+  const handleM = new T.MeshStandardMaterial({ color: 0x2a2e33, metalness: 0.6, roughness: 0.35 });
+  const bx = (t.rr + t.rf) / 2 - 0.12;
+  const doorsX = [t.wind - 0.04, bx, ...(t.k !== 'dep' && t.k !== 'urb' ? [t.rear + 0.08] : [])];
+  for (const sz of [-1, 1]) {
+    for (const dx of doorsX) {
+      const k = at(dx), hgt = Math.max(0.05, p.H[k] - p.bot[k] - 0.16);
+      const ln = new T.Mesh(new T.BoxGeometry(0.012, hgt, 0.006), seam);
+      ln.position.set(dx, p.bot[k] + 0.12 + hgt / 2, sz * (p.hw[k] * 0.965 + 0.002)); grp.add(ln);
+    }
+    for (const hx of [t.wind - 0.36, bx - 0.3]) {
+      const k = at(hx), hd = new T.Mesh(new T.BoxGeometry(0.13, 0.025, 0.02), handleM);
+      hd.position.set(hx, p.H[k] - 0.12, sz * (p.hw[k] * 0.965 + 0.01)); grp.add(hd);
+    }
+  }
   grp.scale.setScalar(1);
   return grp;
 }
@@ -1024,9 +1047,9 @@ function readCar() {
     fuelNow: tank * v('nivel', 50) / 100,
     reserve: tank * state.frac,
     // «Lo más barato posible»: margen mínimo, sin límite de desvío (solo si compensa) y da igual parar en la primera hora
-    corridor: state.frac === OPT_F ? Math.max(det.corridor, 8) : det.corridor, maxDetour: state.frac === OPT_F ? Infinity : det.max,
+    corridor: state.maxSave ? Math.max(det.corridor, 8) : det.corridor, maxDetour: state.maxSave ? Infinity : det.max,
     timeValue: Math.max(0, v('tiempo', 6)),
-    noEarly: state.frac !== OPT_F && $('temprano').checked,
+    noEarly: !state.maxSave && $('temprano').checked,
     eat: state.eat === 'yes', meal: currentMeal(),
   };
 }
@@ -1049,7 +1072,7 @@ function updateGauge() {
     <text x="16" y="120" class="dl">R</text><text x="184" y="120" text-anchor="end" class="dl">Lleno</text></svg>`;
   $('nivel-out').textContent = `${fmt(car.fuelNow, 0)} L`;
   $('fuels').innerHTML = FUELS.map((f) => tile('data-k', f.k, f.k === state.fuel, f.n)).join('');
-  { const lab = $('temprano').closest('label'); if (lab) lab.hidden = state.frac === OPT_F; }
+  { const lab = $('temprano').closest('label'); if (lab) lab.hidden = !!state.maxSave; $('maxsave').checked = !!state.maxSave; }
   $('umbral').innerHTML = THRESHOLDS.map((x) => tile('data-f', x.f, Math.abs(x.f - state.frac) < 0.01, x.n, `${x.d} · unos ${fmt(car.tank * x.f, 0)} L`)).join('');
   const meal = currentMeal();
   if (meal) {
@@ -1057,12 +1080,14 @@ function updateGauge() {
     $('comida').innerHTML = tile('data-eat', 'yes', state.eat === 'yes', `Sí, aprovecho para ${meal.n}`, 'Busco gasolinera con restaurante al lado') + tile('data-eat', 'no', state.eat !== 'yes', 'No, solo gasolina', 'Paro lo justo');
   }
   $('desvio').innerHTML = DETOURS.map((d) => tile('data-d', d.k, d.k === state.detour, d.n, d.d)).join('');
-  $('tipico').innerHTML = `Lo normal en un ${t.k === 'suv' ? 'SUV' : t.n.toLowerCase()}: ${fmt(t.cons, 1)} L/100 km y ${t.tank} L. <button type="button" class="linkbtn inline" id="btn-tipico">Usar estos</button>`;
+  const mdl = CAR_MODELS.find((m) => m[0] === state.car.model);
+  $('tipico').innerHTML = mdl ? `Valores típicos del ${esc(mdl[0])}: ${fmt(mdl[2], 1)} L/100 km y ${mdl[3]} L. <button type="button" class="linkbtn inline" id="btn-tipico">Usar estos</button>`
+    : `Lo normal en un ${t.k === 'suv' ? 'SUV' : t.n.toLowerCase()}: ${fmt(t.cons, 1)} L/100 km y ${t.tank} L. <button type="button" class="linkbtn inline" id="btn-tipico">Usar estos</button>`;
   $('umbral-out').textContent = car.fuelNow <= car.reserve
     ? `Ya estás por debajo de tu límite (${fmt(car.reserve, 0)} L, la marca roja): te buscaré la primera gasolinera que encuentres.`
     : `Tienes unos ${fmt(km, 0)} km antes de bajar de tu límite (${fmt(car.reserve, 0)} L, la marca roja).`;
   const fuelName = FUELS.find((f) => f.k === state.fuel).n, thr = THRESHOLDS.find((x) => Math.abs(x.f - state.frac) < 0.01) || THRESHOLDS[0], det = DETOURS.find((d) => d.k === state.detour) || DETOURS[1];
-  $('car-sum').textContent = `${t.n} · ${fuelName}${meal && state.eat === 'yes' ? ' · paro a ' + meal.n : ''} · ${fmt(car.cons, 1)} L/100 km · ${fmt(car.tank, 0)} L · reposto ${thr.n.toLowerCase()} · ${det.n.toLowerCase()}`;
+  $('car-sum').textContent = `${t.n} · ${fuelName}${meal && state.eat === 'yes' ? ' · paro a ' + meal.n : ''} · ${fmt(car.cons, 1)} L/100 km · ${fmt(car.tank, 0)} L · reposto ${thr.n.toLowerCase()}${state.maxSave ? ' · ahorro máximo' : ' · ' + det.n.toLowerCase()}`;
 }
 function showQ(i, dir = 1) {
   state.q = i;
@@ -1094,7 +1119,7 @@ function save() {
     localStorage.setItem('ruta95', JSON.stringify({
       fuel: state.fuel, ...Object.fromEntries(FIELDS.map((k) => [k, $(k).value])),
       discounts: state.discounts, skin: document.documentElement.dataset.skin || '', theme: document.documentElement.dataset.theme || '',
-      car: state.car, frac: state.frac, detour: state.detour, eat: state.eat, carDone: state.carDone,
+      car: state.car, frac: state.frac, detour: state.detour, eat: state.eat, carDone: state.carDone, maxSave: !!state.maxSave,
       avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, viat: $('viat').checked, recents: state.recents,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
       stops: state.stops.filter((x) => x.place).map((x) => x.place),
@@ -1111,6 +1136,8 @@ function restore() {
     if (d.car && HEX.test(d.car.color)) state.car = { type: CAR_TYPES.some((t) => t.k === d.car.type) ? d.car.type : 'com', color: d.car.color, roof: HEX.test(d.car.roof || '') ? d.car.roof : '', model: typeof d.car.model === 'string' ? d.car.model.slice(0, 60) : '' };
     if (d.eat === 'yes' || d.eat === 'no') state.eat = d.eat;
     if (THRESHOLDS.some((t) => Math.abs(t.f - d.frac) < 0.01)) state.frac = d.frac;
+    else if (Math.abs(d.frac - 0.08) < 0.001) { state.frac = 0.25; state.maxSave = true; }   // de la versión anterior
+    if (d.maxSave) state.maxSave = true;
     if (DETOURS.some((x) => x.k === d.detour)) state.detour = d.detour;
     state.carDone = !!d.carDone;
     $('peajes').checked = !!d.avoidTolls; $('temprano').checked = !!d.noEarly; $('viat').checked = !!d.viat;
@@ -1343,9 +1370,9 @@ function setupTourCar() {
   if (!T) return null;
   try {
     if (!tour.gl) {
-      const cv = document.createElement('canvas'); cv.width = 180; cv.height = 140;
+      const cv = document.createElement("canvas"); cv.width = 224; cv.height = 176;
       tour.gl = new T.WebGLRenderer({ canvas: cv, antialias: true, alpha: true });
-      tour.gl.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); tour.gl.setSize(90, 70, false);
+      tour.gl.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); tour.gl.setSize(112, 88, false);
       tour.scene = new T.Scene();
       tour.scene.add(new T.HemisphereLight(0xffffff, 0x77838f, 0.95));
       const sun = new T.DirectionalLight(0xffffff, 0.9); sun.position.set(3, 8, 5); tour.scene.add(sun);
@@ -2073,6 +2100,7 @@ function init() {
   $('hora').addEventListener('change', () => { const c = document.querySelector('#daychips [aria-checked="true"]'); setDepart(c ? +c.dataset.day : 0, $('hora').value); });
   $('peajes').addEventListener('change', save);
   $('temprano').addEventListener('change', save);
+  $('maxsave').addEventListener('change', () => { state.maxSave = $('maxsave').checked; updateGauge(); save(); });
   $('viat').addEventListener('change', () => { save(); if (state.routes && state.panel === 1) renderRoutes(); });
 
   const auto = () => setTimeout(() => { if (state.panel === 2 && state.q < QS.length - 1) showQ(state.q + 1, 1); }, 260);
@@ -2085,7 +2113,7 @@ function init() {
   });
   $('model-sugg').addEventListener('pointerdown', (e) => { const li = e.target.closest('[data-m]'); if (li) { e.preventDefault(); applyModel(CAR_MODELS[+li.dataset.m]); $('car-model').blur(); } });
   $('car-model').addEventListener('blur', () => setTimeout(() => { $('model-sugg').hidden = true; }, 150));
-  $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; state.car.model = ''; $('car-model').value = ''; paintCar(); build3D(); updateGauge(); save(); } });
+  $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; state.car.model = ''; $('car-model').value = ''; const t = carType(); $('consumo').value = t.cons.toFixed(1); $('deposito').value = t.tank; paintCar(); build3D(); updateGauge(); save(); } });
   $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); build3D(); save(); } });
   $('roof-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-roof]'); if (b) { state.car.roof = b.dataset.roof; paintCar(); build3D(); save(); } });
   const onPick = (e) => {
@@ -2141,7 +2169,7 @@ function init() {
       if (id === 'consumo2') $('consumo').value = el.value;
       updateGauge(); save(); return;
     }
-    if (e.target.closest('#btn-tipico')) { const t = carType(); $('consumo').value = t.cons.toFixed(1); $('deposito').value = t.tank; updateGauge(); save(); return; }
+    if (e.target.closest('#btn-tipico')) { const t = carType(), m = CAR_MODELS.find((x) => x[0] === state.car.model); $('consumo').value = (m ? m[2] : t.cons).toFixed(1); $('deposito').value = m ? m[3] : t.tank; updateGauge(); save(); return; }
     if (e.target.closest('#btn-editcar')) { state.editing = true; buildQS(); showQ(0, -1); }
   });
   $('discounts').addEventListener('input', (e) => {

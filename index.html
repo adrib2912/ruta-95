@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script>try{var d=JSON.parse(localStorage.getItem("ruta95")||"{}");if(d.skin)document.documentElement.dataset.skin=d.skin;if(d.theme)document.documentElement.dataset.theme=d.theme}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=35">
+<link rel="stylesheet" href="app.css?v=37">
 </head>
 <body>
 <main class="wrap">
@@ -130,8 +130,9 @@
 
       <section class="qcard card" data-q="umbral" hidden>
         <h2 class="ptitle">¿Cuándo quieres repostar?</h2>
-        <p class="sub">Buscaré parada antes de que el depósito baje de ahí.</p>
+        <p class="sub">Es tu margen de seguridad: nunca te dejaré bajar de ahí.</p>
         <div class="tiles" id="umbral" role="radiogroup" aria-label="Cuándo repostar"></div>
+        <label class="switch maxsave"><span><b>Ahorro máximo</b><small>Paro cuando salga más barato y me desvío si compensa. Sin bajar del margen que elijas arriba.</small></span><input type="checkbox" id="maxsave" role="switch"></label>
         <label class="check"><input type="checkbox" id="temprano"> Prefiero no parar en la primera hora</label>
       </section>
 
@@ -231,6 +232,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>
