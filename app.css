@@ -188,7 +188,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rows dd.neg { color: var(--warn); }
 .rows .total dt, .rows .total dd { color: var(--ink); font-weight: 700; }
 
-.card h3 { font: 700 15px var(--f-display); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.card :is(h3, h2.h3) { font: 700 15px var(--f-display); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
 .cardhead { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 .cardhead h3 { margin: 0; }
 .mapbtn { height: 36px; padding: 0 12px; border-radius: 10px; border: 1.5px solid var(--line); background: transparent; font-size: 13px; font-weight: 600; }
@@ -389,7 +389,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .swlabel { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: -6px; }
 .swatches { gap: 8px; }
 .swatches button, .sw-custom { width: 36px; height: 36px; }
-.swatches button span { font-size: 10px; font-weight: 700; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.6); }
+.swatches button span { font-size: 11px; letter-spacing: -.01em; font-weight: 700; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.6); }
 .sw-custom { position: relative; border-radius: 50%; border: 2px dashed var(--muted); background: conic-gradient(#e53935, #fdd835, #43a047, #1e88e5, #8e24aa, #e53935); overflow: hidden; cursor: pointer; }
 .sw-custom.on { border-style: solid; box-shadow: 0 0 0 3px var(--surface), 0 0 0 5.5px var(--ink); }
 .sw-custom input { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); opacity: 0; cursor: pointer; }
@@ -498,7 +498,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 html:not([data-skin]) body { -webkit-font-smoothing: antialiased; letter-spacing: -.01em; }
 /* Sin mayúsculas forzadas ni tipografía estrecha */
-html:not([data-skin]) :is(.top h1, .field label, .cta, .go, .goA, .eyebrow, .card h3, .how h2, .qmid p, .gauge-ticks, .verdict > span, .kmtag, .tag, .strip-l span, .wiz button, .hito i, .dialbox .dl) { text-transform: none; letter-spacing: -.01em; }
+html:not([data-skin]) :is(.top h1, .field label, .cta, .go, .goA, .eyebrow, .card h3, .card h2.h3, .how h2, .qmid p, .gauge-ticks, .verdict > span, .kmtag, .tag, .strip-l span, .wiz button, .hito i, .dialbox .dl) { text-transform: none; letter-spacing: -.01em; }
 html:not([data-skin]) .top { padding: 6px 2px 2px; }
 html:not([data-skin]) .top h1 { font: 700 30px/1.05 var(--f-display); letter-spacing: -.02em; }
 html:not([data-skin]) .ptitle, html:not([data-skin]) .qcard .ptitle { font-weight: 700; letter-spacing: -.02em; }
@@ -894,3 +894,20 @@ html[data-theme="dark"]:not([data-skin]) :is(.st-go, .goBig) { box-shadow: none;
 /* En la pantalla de la parada, el único botón principal es el de Google Maps */
 #btn-next.quiet { background: var(--fill, var(--line)); color: var(--blue); box-shadow: none; }
 html:not([data-skin]) :is(.goA, .go, .goBig, .st-go) { color: #fff; }
+
+/* Cabecera compacta a partir del paso 2: deja sitio al contenido */
+.top .logo, .top h1, .top p { transition: width .35s var(--spring, ease), height .35s var(--spring, ease), font-size .35s var(--spring, ease), opacity .2s, max-height .3s; }
+.top p { max-height: 20px; overflow: hidden; }
+body.compact .top .logo { width: 36px; height: 36px; }
+html:not([data-skin]) body.compact .top h1 { font-size: 22px; }
+body.compact .top h1 { font-size: 22px; }
+body.compact .top p { opacity: 0; max-height: 0; margin: 0; }
+/* Un solo indicador de progreso: la barra del paso «Coche» se va llenando con las preguntas */
+.wiz button { position: relative; }
+html:not([data-skin]) .wiz button[data-go="2"][aria-current="step"] { border-top-color: var(--line); }
+.wiz button[data-go="2"]::before { content: ''; position: absolute; left: 0; top: -3px; height: 3px; width: calc(var(--qp, 0) * 100%); background: var(--blue); border-radius: 2px; transition: width .45s var(--spring, ease); opacity: 0; }
+html:not([data-skin]) .wiz button[data-go="2"][aria-current="step"]::before { opacity: 1; }
+.qmid p { font-size: 15px; }
+/* Sin palabras sueltas en la última línea */
+p, .hint, small, dd, .tile small { text-wrap: pretty; }
+html:not([data-skin]) #dots { display: none; }

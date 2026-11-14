@@ -1098,7 +1098,8 @@ function showQ(i, dir = 1) {
     if (on) { c.classList.remove('in-f', 'in-b'); void c.offsetWidth; c.classList.add(dir >= 0 ? 'in-f' : 'in-b'); }
   });
   $('dots').innerHTML = QS.map((q, k) => `<i class="${k === i ? 'on' : k < i ? 'done' : ''}"></i>`).join('');
-  $('q-step').textContent = `${i + 1} de ${QS.length} · ${Q_NAMES[QS[i]]}`;
+  $('q-step').textContent = Q_NAMES[QS[i]];
+  const qb = document.querySelector('#wiz [data-go="2"]'); if (qb) qb.style.setProperty('--qp', ((i + 1) / QS.length).toFixed(3));
   $('q-prev').disabled = i === 0;
   $('q-next').disabled = i === QS.length - 1;
   $('btn-next').textContent = i < QS.length - 1 ? 'Siguiente' : state.plan && state.planSig === planSig() ? 'Ver mi parada' : 'Buscar mi parada';
@@ -1797,7 +1798,7 @@ function renderCompare(P) {
   const dear = P.cands.reduce((a, c) => (c.price > a.price ? c : a), P.cands[0]);
   rows.push({ n: 'La más cara de la ruta', sub: `${fmt(dear.price, 3)} €/L · ${stTown(dear)}`, cost: L * dear.price });
   const max = Math.max(...rows.map((r) => r.cost));
-  return `<section class="card cmp"><h3>Lo mismo en otros sitios</h3><p class="hint">Lo que costarían estos ${fmt(L, 0)} L en cada sitio.</p>
+  return `<section class="card cmp"><h2 class="h3">Lo mismo en otros sitios</h2><p class="hint">Lo que costarían estos ${fmt(L, 0)} L en cada sitio.</p>
     ${rows.map((r) => `<div class="cmprow ${r.me ? 'me' : ''}"><div class="cmpn"><b>${esc(r.n)}</b><small>${esc(r.sub)}</small></div><div class="cmpv"><b>${eur(r.cost)}</b>${r.me ? '' : `<small class="${r.cost - ch.pay >= 0 ? '' : 'less'}">${r.cost - ch.pay >= 0 ? '+' : '−'}${eur(Math.abs(r.cost - ch.pay))}</small>`}</div><i style="width:${(r.cost / max * 100).toFixed(1)}%"></i></div>`).join('')}</section>`;
 }
 
@@ -2138,6 +2139,7 @@ const STEP_NAMES = () => ['Gasolineras de la ruta', 'Desvíos reales', ...(state
 function go(i) {
   const prev = state.panel;
   state.panel = i;
+  document.body.classList.toggle('compact', i > 0);
   state.maxPanel = Math.max(state.maxPanel, i);
   for (let k = 0; k < 4; k++) $('p' + k).hidden = k !== i;
   document.querySelectorAll('#wiz [data-go]').forEach((b) => {
