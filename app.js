@@ -765,7 +765,8 @@ const CAR_TYPES = [
 const CAR_COLORS = ['#F4F4F2', '#C3C7CC', '#7D848C', '#3A3F45', '#16181B', '#D8C3A0', '#6E4B32', '#7A1F2B', '#D5202A', '#F07F1F', '#F2C200', '#8CC63F', '#2E7D4F', '#18A0A8', '#5AA9E6', '#1F5FBF', '#1B2E5A', '#6B3FA0', '#E86AA6'];
 const ROOF_COLORS = ['', '#16181B', '#F4F4F2', '#3A3F45', '#C3C7CC', '#D5202A', '#1F5FBF'];
 const HEX = /^#[0-9a-f]{6}$/i;
-const THRESHOLDS = [{ f: 0.12, n: 'En reserva', d: 'Apuro el depósito' }, { f: 0.25, n: 'A un cuarto', d: 'Lo habitual' }, { f: 1 / 3, n: 'A un tercio', d: 'Con margen' }, { f: 0.5, n: 'A medio depósito', d: 'No me la juego' }];
+const OPT_F = 0.08;
+const THRESHOLDS = [{ f: OPT_F, n: 'Lo más barato posible', d: 'Apuro el depósito, paro cuando sea y me desvío si compensa' }, { f: 0.12, n: 'En reserva', d: 'Apuro el depósito' }, { f: 0.25, n: 'A un cuarto', d: 'Lo habitual' }, { f: 1 / 3, n: 'A un tercio', d: 'Con margen' }, { f: 0.5, n: 'A medio depósito', d: 'No me la juego' }];
 const DETOURS = [
   { k: 'road', n: 'Solo a pie de carretera', d: 'Sin salir de mi ruta', corridor: 1.2, max: 2.5 },
   { k: 'short', n: 'Un desvío corto', d: 'Hasta unos 6 minutos', corridor: 4, max: 6 },
@@ -967,9 +968,10 @@ function readCar() {
     cons, tank, consSafe: cons * (1 + Math.min(50, Math.max(0, v('margen', 10))) / 100),
     fuelNow: tank * v('nivel', 50) / 100,
     reserve: tank * state.frac,
-    corridor: det.corridor, maxDetour: det.max,
+    // «Lo más barato posible»: margen mínimo, sin límite de desvío (solo si compensa) y da igual parar en la primera hora
+    corridor: state.frac === OPT_F ? Math.max(det.corridor, 8) : det.corridor, maxDetour: state.frac === OPT_F ? Infinity : det.max,
     timeValue: Math.max(0, v('tiempo', 6)),
-    noEarly: $('temprano').checked,
+    noEarly: state.frac !== OPT_F && $('temprano').checked,
     eat: state.eat === 'yes', meal: currentMeal(),
   };
 }
@@ -992,6 +994,7 @@ function updateGauge() {
     <text x="16" y="120" class="dl">R</text><text x="184" y="120" text-anchor="end" class="dl">Lleno</text></svg>`;
   $('nivel-out').textContent = `${fmt(car.fuelNow, 0)} L`;
   $('fuels').innerHTML = FUELS.map((f) => tile('data-k', f.k, f.k === state.fuel, f.n)).join('');
+  { const lab = $('temprano').closest('label'); if (lab) lab.hidden = state.frac === OPT_F; }
   $('umbral').innerHTML = THRESHOLDS.map((x) => tile('data-f', x.f, Math.abs(x.f - state.frac) < 0.01, x.n, `${x.d} · unos ${fmt(car.tank * x.f, 0)} L`)).join('');
   const meal = currentMeal();
   if (meal) {
@@ -1553,13 +1556,15 @@ function renderTank(P) {
 
 
 /* Insignia genérica de la gasolinera: su inicial sobre un color estable (no son los logos de las marcas). */
+/* Ficha de la gasolinera en Google Maps (para verla, no para ir) */
+const placeUrl = (c) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([c.s[3], nice(c.s[4] || ''), c.s[5] || '', c.s[7] || ''].filter(Boolean).join(', '))}`;
 /* Insignia de la gasolinera: surtidor sobre el color de la marca (o un gris azulado si no es de las grandes) */
 const BRAND_COLORS = [
   [/REPSOL|CAMPSA|PETRONOR/i, '#F26B21'], [/MOEVE/i, '#0A7E8C'], [/CEPSA/i, '#D7232C'], [/(^|[^A-Z])BP([^A-Z]|$)/i, '#007F3E'],
   [/SHELL/i, '#FFD200', '#D7232C'], [/GALP/i, '#F06A1E'], [/CARREFOUR/i, '#1C4FA1'], [/ALCAMPO|AUCHAN/i, '#E3001B'],
   [/BALLENOIL/i, '#0072BC'], [/PLENERGY/i, '#1F8A4C'], [/PETROPRIX/i, '#6A2C91'], [/AVIA/i, '#D9261C'],
 ];
-const BADGE_PUMP = (c) => `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="10" height="17" rx="2" fill="${c}"/><rect x="6" y="5.5" width="6" height="4.5" rx="1" fill="currentColor" opacity=".9"/><rect x="2.5" y="19" width="13" height="2.5" rx="1" fill="${c}"/><path d="M14 9h1.6q1.4 0 1.4 1.4v5.1q0 1.2 1.1 1.2t1.1-1.2V8.2L17.2 6" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const BADGE_PUMP = (c) => `<svg viewBox="1.1 2.25 20 20" aria-hidden="true"><rect x="4" y="3" width="10" height="17" rx="2" fill="${c}"/><rect x="6" y="5.5" width="6" height="4.5" rx="1" fill="currentColor" opacity=".9"/><rect x="2.5" y="19" width="13" height="2.5" rx="1" fill="${c}"/><path d="M14 9h1.6q1.4 0 1.4 1.4v5.1q0 1.2 1.1 1.2t1.1-1.2V8.2L17.2 6" fill="none" stroke="${c}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function badge(c) {
   const name = (c.s && c.s[3]) || stName(c);
   const b = BRAND_COLORS.find((x) => x[0].test(name));
@@ -1664,7 +1669,7 @@ function renderResult() {
     const c = lg.s;
     const food = c.food && c.food.length ? `<p class="food"><b>Para comer al lado:</b> ${c.food.map((f) => `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.name + ' ' + f.lat.toFixed(5) + ',' + f.lon.toFixed(5))}" target="_blank" rel="noopener">${esc(f.name)}</a> (${fmt(f.d, 0)} m)`).join(' · ')}</p>` : '';
     return `<section class="stopA">
-      <div class="st-head">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)} · hacia las ${hhmm(c.eta)}</p></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
+      <div class="st-head"><a class="st-look" href="${placeUrl(c)}" target="_blank" rel="noopener" title="Ver esta gasolinera en Google Maps">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)} · hacia las ${hhmm(c.eta)}</p><span class="st-see">Ver en el mapa ›</span></div></a><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
       <div class="st-body">${tankSVG(lg, car)}
         <dl class="kv">
           <div><dt>Llegas con</dt><dd>${fmt(lg.arrive, 0)} L</dd></div>
@@ -1705,7 +1710,7 @@ function renderResult() {
   const first = stops[0];
   const slides = [
     `<div class="sl-trip">${renderTour(P)}${big.replace('class="linkbtn inline" data-go="2"', 'class="linkbtn inline" data-go="2" hidden')}
-      <p class="sl-where">${badge(first)}<span><b>${esc(stName(first))}</b><small>${esc(stTown(first))} · km ${fmt(first.km, 0)} · ${fmt(first.price, 3)} €/L</small></span></p></div>`,
+      <a class="sl-where" href="${placeUrl(first)}" target="_blank" rel="noopener">${badge(first)}<span><b>${esc(stName(first))}</b><small>${esc(stTown(first))} · km ${fmt(first.km, 0)} · ${fmt(first.price, 3)} €/L</small></span><i aria-hidden="true">›</i></a></div>`,
     ...ch.legs.map((lg, i) => `<div class="sl-stop">${legsHtml.split('<section class="stopA">').filter(Boolean).map((x) => '<section class="stopA">' + x)[i]}
       <p class="why">${why}</p>
       <div class="acts"><a class="goA" href="${gmaps(ch.stops)}" target="_blank" rel="noopener">Ir en Google Maps</a><button type="button" class="shareA" data-share>${SHARE_SVG}Compartir</button></div></div>`),
@@ -1735,9 +1740,7 @@ function openStory(slides) {
   const el = $('story');
   story.n = slides.length; story.i = 0;
   el.innerHTML = `<div class="st-track">${slides.map((h, i) => `<section class="slide" data-i="${i}" aria-roledescription="pantalla" aria-label="${i + 1} de ${slides.length}">${h}</section>`).join('')}</div>
-    <div class="st-nav"><button type="button" class="st-prev" aria-label="Anterior"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <div class="st-dots">${slides.map(() => '<i></i>').join('')}</div>
-      <button type="button" class="st-next">Siguiente<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>`;
+    <div class="st-nav"><div class="st-dots">${slides.map((_, k) => `<button type="button" aria-label="Pantalla ${k + 1}" data-dot="${k}"></button>`).join('')}</div></div>`;
   el.hidden = false;
   $('result').classList.add('in-story');
   showSlide(0);
@@ -1746,13 +1749,21 @@ function showSlide(i) {
   const el = $('story');
   story.dir = i >= story.i ? 1 : -1; story.i = Math.max(0, Math.min(story.n - 1, i));
   el.querySelectorAll('.slide').forEach((s, k) => { s.classList.toggle('on', k === story.i); s.classList.toggle('back', story.dir < 0); });
-  el.querySelectorAll('.st-dots i').forEach((d, k) => d.classList.toggle('on', k === story.i));
-  el.querySelector('.st-prev').disabled = story.i === 0;
-  el.querySelector('.st-next').hidden = story.i === story.n - 1;
+  el.querySelectorAll('.st-dots [data-dot]').forEach((d, k) => d.classList.toggle('on', k === story.i));
+  paintStoryBar();
   // La animación solo corre a la vista: se para al salir de la primera pantalla y empieza de nuevo al volver
   if (story.i !== 0) { cancelAnimationFrame(tour.raf); if (tour.map) tour.map.stop(); }
   else if (story.dir < 0 && tour.map) { tour.map.invalidateSize(); playTour(); }
   if (story.i > 0) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+const ARROW_L = '<svg class="ar" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ARROW_R = '<svg class="ar" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+/* En la parada, la barra de abajo mueve entre pantallas: ‹ Anterior · Siguiente › */
+function paintStoryBar() {
+  if (state.panel !== 3) return;
+  const inStory = !$('story').hidden;
+  $('btn-back').innerHTML = inStory && story.i > 0 ? ARROW_L + 'Anterior' : ARROW_L + 'Coche';
+  $('btn-next').innerHTML = inStory && story.i < story.n - 1 ? 'Siguiente' + ARROW_R : 'Nueva búsqueda';
 }
 function closeStory() {
   // El mapa de la animación pasa a la vista completa, arriba
@@ -1760,6 +1771,7 @@ function closeStory() {
   if (tourCard) $('strip').appendChild(tourCard);
   $('story').hidden = true; $('story').innerHTML = '';
   $('result').classList.remove('in-story');
+  paintStoryBar();
   if (tour.map) setTimeout(() => { tour.map.invalidateSize(); playTour(); }, 60);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1839,7 +1851,9 @@ function go(i) {
     b.classList.toggle('done', k < i);
   });
   $('btn-back').hidden = i === 0;
+  $('btn-back').textContent = 'Atrás';
   $('btn-next').textContent = NEXT_LABEL[i];
+  if (i === 3 && state.plan) paintStoryBar();
   status('');
   if (i === 1) renderRoutes();
   const pan = $('p' + i); pan.classList.remove('in-f', 'in-b'); void pan.offsetWidth; pan.classList.add(i >= prev ? 'in-f' : 'in-b');
@@ -1853,7 +1867,7 @@ function busy(on, label) {
   const b = $('btn-next');
   b.disabled = on;
   if (on && label) b.textContent = label;
-  if (!on) b.textContent = state.panel === 2 && state.q < QS.length - 1 ? 'Siguiente' : NEXT_LABEL[state.panel];
+  if (!on) { b.textContent = state.panel === 2 && state.q < QS.length - 1 ? 'Siguiente' : NEXT_LABEL[state.panel]; if (state.panel === 3) paintStoryBar(); }
 }
 const fail = (e) => status(e && e.name === 'AbortError' ? 'El servidor tarda demasiado. Prueba otra vez.' : (e && e.message) || 'Algo ha fallado. Prueba otra vez.', true);
 
@@ -2096,14 +2110,15 @@ function init() {
   $('strip').addEventListener('click', (e) => { if (e.target.closest('#btn-replay')) playTour(); });
   $('t-plan').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) { e.preventDefault(); go(+b.dataset.go); } });
   $('story').addEventListener('click', (e) => {
-    if (e.target.closest('.st-next')) showSlide(story.i + 1);
-    else if (e.target.closest('.st-prev')) showSlide(story.i - 1);
+    const dot = e.target.closest('[data-dot]');
+    if (dot) showSlide(+dot.dataset.dot);
     else if (e.target.closest('[data-seeall]')) closeStory();
     else if (e.target.closest('#btn-replay')) playTour();
   });
   // Deslizar entre pantallas (sin estorbar al mapa de la animación)
   let stX = null, stY = 0;
   $('story').addEventListener('pointerdown', (e) => { if (e.target.closest('.leaflet-container')) return; stX = e.clientX; stY = e.clientY; });
+  $('story').addEventListener('pointercancel', () => { stX = null; });
   $('story').addEventListener('pointerup', (e) => {
     if (stX == null) return; const dx = e.clientX - stX, dy = e.clientY - stY; stX = null;
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) showSlide(story.i + (dx < 0 ? 1 : -1));

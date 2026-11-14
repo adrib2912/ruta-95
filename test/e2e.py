@@ -83,10 +83,22 @@ with sync_playwright() as p:
         n = pg.locator('.slide').count(); print('pantallas', n)
         for k in range(n):
             pg.screenshot(path=f'{OUT}/s{k}-{scheme}.png', full_page=True)
-            if k < n - 1: pg.click('.st-next'); pg.wait_for_timeout(500)
+            if k < n - 1: pg.click('#btn-next'); pg.wait_for_timeout(500)
+        # Ida y vuelta entre pantallas varias veces con los botones de abajo
+        seq = []
+        for bt in ['#btn-back']*4 + ['#btn-next']*3 + ['#btn-back']*2 + ['#btn-next']*2:
+            pg.click(bt); pg.wait_for_timeout(250); seq.append(pg.evaluate('()=>[state.panel, story.i]'))
+        print('idavuelta', seq, '| botones', pg.inner_text('#btn-back'), '/', pg.inner_text('#btn-next'))
+        pg.click('#wiz [data-go="3"]'); pg.wait_for_timeout(300); print('dbg', pg.evaluate("()=>[state.panel, $('story').hidden, $('result').hidden, $('loading').hidden, document.querySelectorAll('[data-dot]').length, !!state.plan]")); pg.locator('[data-dot="1"]').dispatch_event('click'); pg.wait_for_timeout(200); print('punto', pg.evaluate('()=>story.i'))
+        # deslizar con el dedo (eventos de puntero) fuera del mapa
+        box = pg.locator('.slide.on').bounding_box()
+        for dx in (-200, 200):
+            pg.evaluate('''([x,y,dx])=>{const el=document.querySelector('.slide.on'); const o={bubbles:true,clientX:x,clientY:y,pointerId:1}; el.dispatchEvent(new PointerEvent('pointerdown',o)); el.dispatchEvent(new PointerEvent('pointerup',{...o,clientX:x+dx}));}''', [box['x']+200, box['y']+150, dx])
+            pg.wait_for_timeout(250); print('tras deslizar', dx, pg.evaluate('()=>story.i'))
+        pg.evaluate('()=>showSlide(story.n-1)'); pg.wait_for_timeout(200)
         # Navegación: Atrás recorre las pantallas; ir al coche y volver sin recalcular
         pg.click('#btn-back'); pg.wait_for_timeout(300); a = pg.evaluate('()=>story.i')
-        pg.click('[data-go="2"]'); pg.wait_for_timeout(400); q = pg.evaluate('()=>QS[state.q]'); lbl = pg.inner_text('#btn-next')
+        pg.click('#wiz [data-go="2"]'); pg.wait_for_timeout(400); q = pg.evaluate('()=>QS[state.q]'); lbl = pg.inner_text('#btn-next')
         pg.screenshot(path=f'{OUT}/tucoche-{scheme}.png')
         pg.click('#btn-mycar-ok'); pg.wait_for_timeout(300)
         while pg.evaluate('()=>state.panel') == 2:

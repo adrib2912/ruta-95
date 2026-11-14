@@ -651,7 +651,7 @@ body.locked { overflow: hidden; }
 .slide > div { display: flex; flex-direction: column; gap: 12px; }
 .sl-trip .hero { background: var(--surface); border-radius: 22px; padding: 18px 20px; box-shadow: var(--shadow, none); }
 .sl-where { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: 18px; padding: 12px 16px; box-shadow: var(--shadow, none); margin: 0; }
-.sl-where span { display: flex; flex-direction: column; min-width: 0; }
+.sl-where > span:not(.badge) { display: flex; flex-direction: column; min-width: 0; }
 .sl-where b { font-size: 17px; }
 .sl-where small { color: var(--muted); font-size: 14px; }
 .sl-stop .stopA { background: var(--surface); border-radius: 22px; padding: 18px; box-shadow: var(--shadow, none); }
@@ -688,3 +688,23 @@ body.locked { overflow: hidden; }
 [data-q="tucoche"] .acts { margin-top: 16px; }
 [data-q="tucoche"] .cta { width: 100%; }
 .mycar .mycar-pic { position: static; inset: auto; left: auto; bottom: auto; transform: none; animation: none; width: 110px; height: auto; }
+.badge { box-shadow: none !important; }
+/* Nombre de la gasolinera: enlace a su ficha en Google Maps */
+.st-look { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+.st-see { display: inline-block; margin-top: 2px; font: 600 14px var(--f-body); color: var(--blue); }
+a.sl-where { color: inherit; text-decoration: none; }
+.sl-where i { font-style: normal; font-size: 28px; color: var(--muted); line-height: 1; }
+/* Pantallas: puntos pulsables; flechas en la barra de abajo */
+.story { touch-action: pan-y; }
+.st-nav { justify-content: center; }
+.st-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 4px; background: var(--line); transition: width .25s, background .25s; }
+.st-dots button.on { width: 24px; background: var(--blue); }
+.st-dots { gap: 8px; padding: 6px 0; }
+#btn-back, #btn-next { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.bar .ar { width: 20px; height: 20px; flex: none; }
+.st-head { grid-template-columns: minmax(0, 1fr) auto; }
+.st-look { min-width: 0; }
+.st-look .st-id { min-width: 0; }
+.st-p { flex: none; }
+.sl-where .badge { flex: none !important; width: 44px; }
+.sl-where > span:not(.badge) { flex: 1; min-width: 0; }
