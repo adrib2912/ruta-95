@@ -524,6 +524,7 @@ async function valhallaRoutes(points, avoidTolls) {
       legsKm.push(l.summary.length);
     }
     const route = buildRoute(coords, t.summary.length, t.summary.time / 60);
+    route.router = 'valhalla';
     let acc = 0;
     route.stopKm = legsKm.slice(0, -1).map((k) => (acc += k));
     route.segs = [];
@@ -646,6 +647,8 @@ function tollCost(route, depart, tag) {
       const d = distToLine(st.lat, st.lon, e.w);
       if (d < bd && d <= (e.r ? TOLL_TOL : 1.5)) { bd = d; best = e; }
     }
+    // Con Valhalla, que sabe qué tramos son de pago, solo se cobra lo que él marca como peaje
+    if (route.router === 'valhalla' && !st.toll) continue;
     if (!best && !st.toll) continue;
     const t = new Date(depart.getTime() + (st.atKm / route.distKm) * route.durMin * 60000);
     const key = best ? best.n : 'otros';
@@ -1788,7 +1791,7 @@ async function stepRoute() {
     if (state.routes.every((r) => r.tollKm >= 1)) {
       try {
         const free = (await fetchRoute(pts, true)).find((r) => r.tollKm < 1);
-        if (free) { free.name = (free.name || 'Sin peajes') + ' · sin peajes'; state.routes.push(free); }
+        if (free) { free.name = free.name || 'Sin peajes'; state.routes.push(free); }
       } catch (_) { /* sin alternativa: se enseña solo el precio */ }
     }
     state.alt = 0; state.plan = null; state.maxPanel = 1;
