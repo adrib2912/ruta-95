@@ -1298,8 +1298,17 @@ const gmaps = (cands) => {
   via.sort((x, y) => x.km - y.km);
   return `https://www.google.com/maps/dir/?api=1&origin=${ll(o)}&destination=${ll(d)}&waypoints=${via.map((v) => ll(v.p)).join('%7C')}&travelmode=driving`;
 };
-const stName = (c) => nice(c.s[3] || 'Gasolinera');
-const stTown = (c) => nice(c.s[5] || c.s[6] || '');
+// Nombres limpios: «SAN ROQUE ( LOW COST )» → «San Roque (Low Cost)»; «CASAR DE ESCALONA (EL)» → «El Casar de Escalona»
+const tidy = (s) => String(s).replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').replace(/\(\s*\)/g, '').replace(/\s+([,.])/g, '$1').trim();
+const stName = (c) => { const r = tidy(c.s[3] || 'Gasolinera'); return /^[A-Z0-9&]{2,4}$/.test(r) ? r : tidy(nice(r)); };
+const stTown = (c) => {
+  let t = tidy(nice(c.s[5] || c.s[6] || ''));
+  const m = t.match(/^(.*?)\s*\((El|La|Los|Las|L'|O|A|Es|Sa|Els|Les)\)$/i);
+  if (m) t = `${nice(m[2])}${/'$/.test(m[2]) ? '' : ' '}${m[1]}`;
+  return t.replace(/ (De|Del|La|Las|Los|El|Y|D'|En) /g, (w) => w.toLowerCase());
+};
+// Tamaño del nombre según lo largo que sea, para que no descoloque la cabecera
+const nameCls = (s) => (s.length > 24 ? 'nm-l' : s.length > 15 ? 'nm-m' : '');
 const stPlace = (c) => [nice(c.s[4]), stTown(c)].filter(Boolean).join(' · ');
 const approx = (c) => (c.exact ? '' : '≈ ');
 const mins = (m) => (m < 0.5 ? 'menos de 1 min' : '+' + fmt(m, 0) + ' min');
@@ -1781,7 +1790,7 @@ function renderResult() {
     const c = lg.s;
     const food = c.food && c.food.length ? `<p class="food"><b>Para comer al lado:</b> ${c.food.map((f) => `<a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(f.name + ' ' + f.lat.toFixed(5) + ',' + f.lon.toFixed(5))}" target="_blank" rel="noopener">${esc(f.name)}</a> (${fmt(f.d, 0)} m)`).join(' · ')}</p>` : '';
     return `<section class="stopA">
-      <div class="st-head"><a class="st-look" href="${placeUrl(c)}" target="_blank" rel="noopener" title="Ver esta gasolinera en Google Maps">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)} · hacia las ${hhmm(c.eta)}</p><span class="st-see">Ver en el mapa ›</span></div></a><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
+      <div class="st-head"><a class="st-look" href="${placeUrl(c)}" target="_blank" rel="noopener" title="Ver esta gasolinera en Google Maps">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2 class="${nameCls(stName(c))}">${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)} · hacia las ${hhmm(c.eta)}</p><span class="st-see">Ver en el mapa ›</span></div></a><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
       <div class="st-body">${tankSVG(lg, car)}
         <dl class="kv">
           <div><dt>Llegas con</dt><dd>${fmt(lg.arrive, 0)} L</dd></div>
@@ -1817,6 +1826,7 @@ function renderResult() {
   $('t-otras').innerHTML = renderList(P);
   $('t-plan').insertAdjacentHTML('afterbegin', '<button type="button" class="linkbtn restory" data-restory>Ver el resumen paso a paso</button>');
   state.mapDirty = true;
+  saveLast(P, ch);
   showTab('plan');
   // Resumen por pantallas: viaje y ahorro, cada parada, la comparación y el final con todo el detalle
   const first = stops[0];
@@ -1828,7 +1838,7 @@ function renderResult() {
       const food = c.food && c.food.length ? `<p><b>Para comer al lado:</b> ${c.food.map((f) => `${esc(f.name)} (${fmt(f.d, 0)} m)`).join(' · ')}</p>` : '';
       const row = (k, label, val, cls = '') => `<div class="sr ${cls}" style="--d:${(0.55 + k * 0.32).toFixed(2)}s"><span>${label}</span><b>${val}</b></div>`;
       return `<div class="sl-stop"><section class="stopA">
-        <div class="st-head"><div class="st-look">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)}</p></div></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
+        <div class="st-head"><div class="st-look">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2 class="${nameCls(stName(c))}">${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)}</p></div></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
         <div class="st-when sr" style="--d:.1s"><div><small>Llegas a las</small><b>${hhmm(c.eta)}</b></div><div><small>En el depósito</small><b>${fmt(lg.arrive, 0)} L</b></div></div>
         <div class="st-story">${tankSVG(lg, car)}
           <div class="st-rows">
@@ -1875,7 +1885,7 @@ function openStory(slides) {
 function showSlide(i) {
   const el = $('story');
   story.dir = i >= story.i ? 1 : -1; story.i = Math.max(0, Math.min(story.n - 1, i));
-  el.querySelectorAll('.slide').forEach((s, k) => { s.classList.toggle('on', k === story.i); s.classList.toggle('back', story.dir < 0); });
+  el.querySelectorAll('.slide').forEach((s, k) => { s.classList.toggle('on', k === story.i); s.classList.toggle('rev', story.dir < 0); });
   el.querySelectorAll('.st-dots [data-dot]').forEach((d, k) => d.classList.toggle('on', k === story.i));
   paintStoryBar();
   // La animación solo corre a la vista: se para al salir de la primera pantalla y empieza de nuevo al volver
@@ -2062,6 +2072,31 @@ async function stepCompute() {
   } catch (e) { busy(false); go(2); fail(e); }
 }
 
+/* ---------- Último plan, para verlo sin cobertura ---------- */
+function saveLast(P, ch) {
+  try {
+    localStorage.setItem('ruta95-last', JSON.stringify({
+      at: Date.now(), from: state.origin && state.origin.name, to: state.dest && state.dest.name, url: gmaps(ch.stops),
+      endL: Math.round(ch.endFuel), net: ch.net,
+      stops: ch.legs.map((lg) => ({ name: stName(lg.s), town: stTown(lg.s), km: Math.round(lg.s.km), eta: +lg.s.eta, price: lg.s.price, L: Math.round(lg.L), pay: lg.pay, place: placeUrl(lg.s) })),
+    }));
+  } catch (_) { /* sin almacenamiento */ }
+}
+function showLast() {
+  const box = $('lastplan');
+  if (!box) return;
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem('ruta95-last') || 'null'); } catch (_) { /* nada */ }
+  const recent = d && Date.now() - d.at < 8 * 3600e3;
+  if (!d || !d.stops || !(recent || !navigator.onLine)) { box.hidden = true; return; }
+  const ago = (() => { const m = Math.round((Date.now() - d.at) / 60000); return m < 60 ? `hace ${Math.max(1, m)} min` : m < 1440 ? `hace ${Math.round(m / 60)} h` : `el ${new Date(d.at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`; })();
+  box.innerHTML = `${navigator.onLine ? '' : '<p class="lp-off"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 8.5a15 15 0 0 1 20 0M5.5 12a10 10 0 0 1 13 0M9 15.5a5 5 0 0 1 6 0M3 3l18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Sin conexión. Aquí tienes tu último plan.</p>'}
+    <div class="lp-head"><small>Tu último plan · ${ago}</small><b>${esc(d.from || '')} → ${esc(d.to || '')}</b></div>
+    ${d.stops.map((s) => `<a class="lp-stop" href="${esc(s.place)}" target="_blank" rel="noopener"><span><b>${esc(s.name)}</b><small>${esc(s.town)} · km ${fmt(s.km, 0)}${s.eta ? ' · hacia las ' + hhmm(new Date(s.eta)) : ''}</small></span><span class="lp-p"><b>${fmt(s.price, 3)}</b><small>+${fmt(s.L, 0)} L · ${eur(s.pay)}</small></span></a>`).join('')}
+    <a class="lp-go" href="${esc(d.url)}" target="_blank" rel="noopener">Abrir en Google Maps</a>`;
+  box.hidden = false;
+}
+
 function init() {
   // Que se comporte como una app: sin zoom con los dedos ni con doble toque
   for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
@@ -2074,6 +2109,12 @@ function init() {
   go(0);
   // Los precios se descargan ya, en segundo plano: sirven también para predecir municipios al escribir
   state.stationsP = loadStations().catch(() => {});
+  showLast();
+  addEventListener('online', showLast); addEventListener('offline', showLast);
+  // Funciona como app instalada y sin cobertura
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const inst = $('install-row'); if (inst) inst.hidden = !!standalone;
 
   $('btn-next').addEventListener('click', () => {
     if (state.panel === 0) stepRoute();

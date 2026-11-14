@@ -644,7 +644,7 @@ body.locked { overflow: hidden; }
 .slide:not(.on) { display: none; }
 @media (prefers-reduced-motion: no-preference) {
   .slide.on { animation: slideIn .38s cubic-bezier(.2,.8,.2,1) both; }
-  .slide.on.back { animation-name: slideBack; }
+  .slide.on.rev { animation-name: slideBack; }
 }
 @keyframes slideIn { from { opacity: 0; transform: translateX(36px); } }
 @keyframes slideBack { from { opacity: 0; transform: translateX(-36px); } }
@@ -795,3 +795,30 @@ a.sl-where { color: inherit; text-decoration: none; }
 .switch.maxsave b { font: 600 17px var(--f-body); }
 .switch.maxsave small { font-size: 13px; color: var(--muted); line-height: 1.35; }
 a.st-go { text-decoration: none; }
+
+/* Cabecera de la parada: el precio siempre fijo a la derecha; el nombre se adapta */
+.st-head { grid-template-columns: minmax(0, 1fr) max-content; align-items: start; }
+.st-p { min-width: 92px; padding-top: 4px; white-space: nowrap; }
+.st-id h2 { color: var(--ink); overflow-wrap: normal; word-break: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; text-wrap: balance; }
+.st-id h2.nm-m { font-size: 22px; line-height: 1.1; }
+.st-id h2.nm-l { font-size: 19px; line-height: 1.12; }
+.st-id p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.st-look .badge { align-self: center; }
+/* iOS no debe convertir nombres, direcciones o importes en enlaces azules */
+a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font: inherit !important; }
+.st-p b, .st-id h2 { -webkit-user-select: none; user-select: none; }
+
+/* Último plan (también sin conexión) */
+.lastplan { background: var(--surface); border-radius: 20px; padding: 14px 16px; margin-bottom: 14px; box-shadow: var(--shadow, none); display: flex; flex-direction: column; gap: 10px; }
+.lp-off { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 600; color: var(--warn, #FF9F0A); font-size: 15px; }
+.lp-off svg { width: 20px; height: 20px; flex: none; }
+.lp-head small { display: block; font: 700 12px var(--f-display); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lp-head b { font: 700 19px var(--f-display); }
+.lp-stop { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: var(--fill, var(--bg)); color: var(--ink); text-decoration: none; }
+.lp-stop > span { display: flex; flex-direction: column; min-width: 0; }
+.lp-stop small { color: var(--muted); font-size: 13px; }
+.lp-stop b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-p { text-align: right; flex: none; }
+.lp-p b { font: 700 18px var(--f-display); font-variant-numeric: tabular-nums; }
+.lp-go { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 14px; background: var(--cta-bg, var(--blue)); color: var(--cta-ink, #fff); font-weight: 700; text-decoration: none; }
+.ish { width: 17px; height: 17px; vertical-align: -3px; color: var(--blue); }

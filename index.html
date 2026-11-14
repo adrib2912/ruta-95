@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Ruta 95</title>
 <meta name="description" content="Dónde repostar en tu ruta: la parada que más te ahorra contando el desvío.">
@@ -18,7 +19,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
 <script>try{var d=JSON.parse(localStorage.getItem("ruta95")||"{}");if(d.skin)document.documentElement.dataset.skin=d.skin;if(d.theme)document.documentElement.dataset.theme=d.theme}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=42">
+<link rel="stylesheet" href="app.css?v=44">
 </head>
 <body>
 <main class="wrap">
@@ -46,6 +47,7 @@
 
   <!-- Panel 1: Ruta -->
   <section class="panel" id="p0" aria-label="Ruta">
+    <div class="lastplan" id="lastplan" hidden></div>
     <div class="sign">
       <div class="field">
         <label for="origen">Salgo de</label>
@@ -215,6 +217,7 @@
           </div></div><p class="gnote">El valor de tu tiempo pesa los desvíos y los peajes; el margen hace más prudente la autonomía.</p></div>
     <div class="group"><h3>Peajes</h3><div class="gbox"><label class="grow switch"><span>Tengo telepeaje (Vía-T)</span><input type="checkbox" id="viat" role="switch"></label></div><p class="gnote">Con telepeaje algunas autopistas cobran menos. Las tarifas son las de 2026 para turismos.</p></div>
     <div class="group"><h3>Precios</h3><div class="gbox gtext"><p id="data-date">Cargando…</p><p>Se actualizan cada hora desde el Geoportal de Gasolineras del Ministerio para la Transición Ecológica. Cada gasolinera puede cambiar su precio durante el día.</p><p>Rutas: Valhalla (FOSSGIS) y, de reserva, OSRM. Mapas y restaurantes: OpenStreetMap.</p></div></div>
+    <div class="group" id="install-row"><h3>Tenerla como app</h3><div class="gbox gtext"><p>En el iPhone, abre esta página en Safari, toca <b>Compartir</b> <svg class="ish" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M6 11H5v10h14V11h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> y luego <b>Añadir a pantalla de inicio</b>. Se abre a pantalla completa y, sin cobertura, te enseña tu último plan.</p></div></div>
     <div class="group"><h3>Cómo funciona</h3><div class="gbox gtext"><ol>
         <li>Dime de dónde a dónde vas y elige el camino en el mapa.</li>
         <li>Cuéntame cómo es tu coche y cuánto llevas en el depósito.</li>
@@ -235,6 +238,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
 <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=42"></script>
+<script src="app.js?v=44"></script>
 </body>
 </html>
