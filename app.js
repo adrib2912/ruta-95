@@ -1574,22 +1574,28 @@ function badge(c) {
 /* Depósito dibujado: azul lo que traes, verde lo que echas, raya roja tu límite. */
 let tankSeq = 0;
 function tankSVG(lg, car) {
-  const id = 'tk' + (++tankSeq), H = 118, top = 26, y = (l) => top + H - (l / car.tank) * H;
+  const id = 'tk' + (++tankSeq), X = 14, W = 92, top = 24, H = 136, y = (l) => top + H - (l / car.tank) * H;
   const ya = y(lg.arrive), yf = y(Math.min(car.tank, lg.arrive + lg.L)), yr = y(car.reserve);
-  return `<svg class="tankA" viewBox="0 0 120 160" role="img" aria-label="Depósito: llegas con ${fmt(lg.arrive, 0)} litros y echas ${fmt(lg.L, 0)}">
-    <defs><clipPath id="${id}"><rect x="10" y="${top}" width="100" height="${H}" rx="20"/></clipPath>
-      <pattern id="${id}s" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="8" height="8" fill="var(--good)"/><rect width="3" height="8" fill="#fff" opacity=".28"/></pattern></defs>
-    <path d="M86 ${top + 2}V12a5 5 0 0 1 5-5h12a5 5 0 0 1 5 5v8" fill="none" stroke="var(--ink)" stroke-width="5" stroke-linecap="round"/>
-    <rect x="10" y="${top}" width="100" height="${H}" rx="20" fill="var(--bg)"/>
+  const ticks = [0.25, 0.5, 0.75].map((f) => `<line x1="${X + W - 14}" x2="${X + W - 6}" y1="${(top + H - f * H).toFixed(1)}" y2="${(top + H - f * H).toFixed(1)}" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/>`).join('');
+  return `<svg class="tankA" viewBox="0 0 120 168" role="img" aria-label="Depósito: llegas con ${fmt(lg.arrive, 0)} litros y echas ${fmt(lg.L, 0)}">
+    <defs><clipPath id="${id}"><rect x="${X}" y="${top}" width="${W}" height="${H}" rx="24"/></clipPath>
+      <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4DA3FF"/><stop offset="1" stop-color="#0A66D6"/></linearGradient>
+      <linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5FDB7C"/><stop offset="1" stop-color="#24A148"/></linearGradient>
+      <pattern id="${id}s" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="12" fill="#fff" opacity=".18"/></pattern></defs>
+    <rect x="70" y="6" width="24" height="12" rx="5" fill="var(--muted)" opacity=".55"/><rect x="76" y="16" width="12" height="10" fill="var(--muted)" opacity=".45"/>
+    <rect x="${X}" y="${top}" width="${W}" height="${H}" rx="24" fill="var(--fill, var(--bg))"/>
     <g clip-path="url(#${id})">
-      <rect class="lq have" x="0" y="${ya.toFixed(1)}" width="120" height="${(top + H - ya).toFixed(1)}" fill="var(--blue)"/>
+      <rect class="lq have" x="0" y="${ya.toFixed(1)}" width="120" height="${(top + H - ya).toFixed(1)}" fill="url(#${id}b)"/>
+      <rect class="lq add" x="0" y="${yf.toFixed(1)}" width="120" height="${(ya - yf).toFixed(1)}" fill="url(#${id}g)"/>
       <rect class="lq add" x="0" y="${yf.toFixed(1)}" width="120" height="${(ya - yf).toFixed(1)}" fill="url(#${id}s)"/>
-      <path class="wave" d="M0 ${yf.toFixed(1)} q15 -5 30 0 t30 0 t30 0 t30 0 v6 h-120z" fill="var(--good)" opacity=".6"/>
+      <path class="wave" d="M0 ${yf.toFixed(1)} q15 -5 30 0 t30 0 t30 0 t30 0 v6 h-120z" fill="#5FDB7C" opacity=".7"/>
+      <rect x="${X + 8}" y="${top + 6}" width="10" height="${H - 12}" rx="5" fill="#fff" opacity=".18"/>
+      ${ticks}
     </g>
-    <line x1="10" x2="110" y1="${yr.toFixed(1)}" y2="${yr.toFixed(1)}" stroke="var(--red)" stroke-width="2" stroke-dasharray="5 4"/>
-    <rect x="10" y="${top}" width="100" height="${H}" rx="20" fill="none" stroke="var(--ink)" stroke-width="5"/>
-    <text x="60" y="${Math.min(top + H - 8, ya + 22).toFixed(1)}" text-anchor="middle" class="tk-t">${fmt(lg.arrive, 0)} L</text>
-    ${ya - yf > 22 ? `<text x="60" y="${((ya + yf) / 2 + 6).toFixed(1)}" text-anchor="middle" class="tk-t">+${fmt(lg.L, 0)}</text>` : ''}
+    <line x1="${X}" x2="${X + W}" y1="${yr.toFixed(1)}" y2="${yr.toFixed(1)}" stroke="#FF453A" stroke-width="2.5" stroke-dasharray="5 4"/>
+    <rect x="${X}" y="${top}" width="${W}" height="${H}" rx="24" fill="none" stroke="var(--line)" stroke-width="3"/>
+    <text x="${X + W / 2}" y="${Math.min(top + H - 10, ya + 24).toFixed(1)}" text-anchor="middle" class="tk-t">${fmt(lg.arrive, 0)} L</text>
+    ${ya - yf > 24 ? `<text x="${X + W / 2}" y="${((ya + yf) / 2 + 7).toFixed(1)}" text-anchor="middle" class="tk-t">+${fmt(lg.L, 0)}</text>` : ''}
   </svg>`;
 }
 
@@ -1717,15 +1723,15 @@ function renderResult() {
       const row = (k, label, val, cls = '') => `<div class="sr ${cls}" style="--d:${(0.55 + k * 0.32).toFixed(2)}s"><span>${label}</span><b>${val}</b></div>`;
       return `<div class="sl-stop"><section class="stopA">
         <div class="st-head"><div class="st-look">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)}</p></div></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
-        <p class="st-when sr" style="--d:.1s"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>Llegas hacia las <b>${hhmm(c.eta)}</b> con <b>${fmt(lg.arrive, 0)} L</b></span></p>
+        <p class="st-when sr" style="--d:.1s"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>Llegas a las <b>${hhmm(c.eta)}</b> con <b>${fmt(lg.arrive, 0)} L</b></span></p>
         <div class="st-story">${tankSVG(lg, car)}
           <div class="st-rows">
             ${row(0, lg.full ? 'Llenas' : 'Echas', `+${fmt(lg.L, 0)} L`, 'add')}
             ${row(1, 'Pagas', eur(lg.pay))}
             ${row(2, 'En una normal', eur(lg.L * P.ref), 'muted')}
-            ${save > 0.005 ? row(3, 'Te ahorras', eur(save), 'save') : ''}
-          </div></div></section>
-        ${last ? `<p class="st-nexthint sr" style="--d:2s">Siguiente: <b>abre la ruta en Google Maps con la parada ya puesta</b></p>` : ''}
+          </div></div>
+        ${save > 0.005 ? `<div class="st-save sr" style="--d:1.6s"><span>Te ahorras</span><b>${eur(save)}</b></div>` : ''}</section>
+        ${last ? `<button type="button" class="st-go sr" style="--d:2.1s" data-next><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg><span><b>¡Vamos! Ver mi ruta</b><small>La abres en Google Maps con la parada ya puesta</small></span><i aria-hidden="true">›</i></button>` : `<button type="button" class="st-go sr" style="--d:2.1s" data-next><span><b>Ver la siguiente parada</b></span><i aria-hidden="true">›</i></button>`}
         <div class="small-print"><p>${why}${c.detourMin >= 0.5 ? ` Desvío: ${approx(c)}${mins(c.detourMin)}.` : ''}</p><p>${esc(nice(c.s[4]))}${c.s[8] ? ' · Horario ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (sin confirmar)' : ''}</p>${food}</div></div>`;
     }),
     `<div class="sl-end card"><h2>Listo para salir</h2>
@@ -1783,7 +1789,7 @@ function paintStoryBar() {
   if (inStory) {
     if (i === 0) label = 'Ver dónde parar' + ARROW_R;
     else if (i < end - 1) label = 'Siguiente parada' + ARROW_R;
-    else if (i === end - 1) label = 'Listo para salir' + ARROW_R;
+    else if (i === end - 1) label = '¡Vamos!' + ARROW_R;
     else if (i === end) label = 'Comparar precios' + ARROW_R;
   }
   $('btn-next').innerHTML = label;
@@ -2137,6 +2143,7 @@ function init() {
   $('story').addEventListener('click', (e) => {
     const dot = e.target.closest('[data-dot]');
     if (dot) showSlide(+dot.dataset.dot);
+    else if (e.target.closest('[data-next]')) showSlide(story.i + 1);
     else if (e.target.closest('[data-seeall]')) closeStory();
     else if (e.target.closest('#btn-replay')) playTour();
   });

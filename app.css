@@ -758,3 +758,20 @@ a.sl-where { color: inherit; text-decoration: none; }
 .st-rows .sr b { font-size: 22px; }
 .st-rows .sr.muted b { font-size: 18px; }
 .st-rows .sr span { font-size: 15px; }
+/* Ahorro a todo lo ancho, sin pisar el depósito */
+.st-rows .sr.save { display: none; }
+.st-save { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-radius: 16px; background: var(--good-soft, #E4F6E8); color: var(--good); }
+.st-save span { font: 600 17px var(--f-body); }
+.st-save b { font: 800 30px var(--f-display); letter-spacing: -.02em; }
+/* Botón grande para seguir */
+.st-go { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 76px; padding: 14px 18px; border: 0; border-radius: 20px; background: var(--cta-bg); color: var(--cta-ink); text-align: left; box-shadow: 0 10px 24px rgba(0,122,255,.3); }
+.st-go svg { width: 30px; height: 30px; flex: none; }
+.st-go span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.st-go b { font: 700 20px var(--f-body); letter-spacing: -.01em; }
+.st-go small { font: 500 14px var(--f-body); opacity: .9; }
+.st-go i { font-style: normal; font-size: 34px; line-height: 1; }
+@media (prefers-reduced-motion: no-preference) { .slide.on .st-go { animation: rise .5s cubic-bezier(.2,.8,.2,1) both, nudge 1.6s ease-in-out 3s 2; animation-delay: var(--d), 3s; } }
+.st-nexthint { display: none; }
+/* Depósito nuevo */
+.tankA .tk-t { font: 800 17px var(--f-display); fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.18); stroke-width: 2px; }
+.st-story { grid-template-columns: 112px 1fr; }
