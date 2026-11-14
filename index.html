@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script>try{var d=JSON.parse(localStorage.getItem("ruta95")||"{}");if(d.skin)document.documentElement.dataset.skin=d.skin;if(d.theme)document.documentElement.dataset.theme=d.theme}catch(e){}</script>
-<link rel="stylesheet" href="app.css?v=34">
+<link rel="stylesheet" href="app.css?v=35">
 </head>
 <body>
 <main class="wrap">
@@ -101,7 +101,9 @@
     </div>
     <div id="deck">
       <section class="qcard card" data-q="coche">
-        <h2 class="ptitle">¿Cómo es tu coche?</h2>
+        <h2 class="ptitle">¿Qué coche tienes?</h2>
+        <div class="modelsearch"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><input id="car-model" type="text" placeholder="Busca tu modelo: Seat León, Corolla…" autocomplete="off" enterkeyhint="done" aria-label="Modelo de tu coche"><ul class="sugg" id="model-sugg" hidden></ul></div>
+        <p class="hint">Si no lo encuentras, elige abajo la carrocería más parecida.</p>
         <div class="viewer"><canvas id="car3d"></canvas><div class="veh flat" id="car-flat" hidden></div></div>
         <p class="eg" id="car-eg"></p>
         <p class="hint center" id="car-hint">Arrástralo para girarlo</p>
@@ -229,6 +231,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>

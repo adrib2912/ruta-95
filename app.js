@@ -762,6 +762,30 @@ const CAR_TYPES = [
   { k: 'fur', n: 'Furgoneta', eg: 'La más grande y alta', len: 4.95, w: 1.93, gc: 0.24, belt: 1.1, roof: 1.92, wind: 1.98, rf: 1.4, rr: -2.24, rear: -2.4, nose: 0.98, r: 0.34, cons: 8.0, tank: 70 },
   { k: 'dep', n: 'Deportivo', eg: 'Bajo y ancho', len: 4.4, w: 1.86, gc: 0.15, belt: 0.78, roof: 1.27, wind: 0.86, rf: -0.05, rr: -0.72, rear: -1.72, nose: 0.62, r: 0.34, deck: 1, cons: 8.5, tank: 55 },
 ];
+/* Modelos más vendidos en España: carrocería, consumo real típico (L/100 km) y depósito (L).
+   Son valores orientativos de la versión de gasolina o híbrida más común; cada uno puede ajustarlos después. */
+const CAR_MODELS = [
+  ['Fiat 500', 'urb', 5.6, 35], ['Fiat Panda', 'urb', 5.8, 37], ['Hyundai i10', 'urb', 5.3, 36], ['Kia Picanto', 'urb', 5.3, 35], ['Toyota Aygo X', 'urb', 5.0, 35], ['Renault Twingo', 'urb', 5.4, 35],
+  ['Seat Ibiza', 'com', 5.6, 40], ['Volkswagen Polo', 'com', 5.6, 40], ['Renault Clio', 'com', 5.5, 42], ['Peugeot 208', 'com', 5.6, 44], ['Opel Corsa', 'com', 5.6, 44], ['Skoda Fabia', 'com', 5.5, 40],
+  ['Hyundai i20', 'com', 5.6, 40], ['Toyota Yaris', 'com', 4.4, 36], ['Dacia Sandero', 'com', 5.9, 50], ['Citroën C3', 'com', 5.7, 44], ['Ford Fiesta', 'com', 5.7, 42], ['Kia Rio', 'com', 5.6, 45], ['Mazda 2', 'com', 5.0, 44],
+  ['Seat León', 'com', 6.0, 50], ['Volkswagen Golf', 'com', 6.0, 50], ['Toyota Corolla', 'com', 4.8, 43], ['Peugeot 308', 'com', 6.1, 52], ['Renault Mégane', 'com', 6.2, 50], ['Opel Astra', 'com', 6.0, 52], ['Ford Focus', 'com', 6.2, 52],
+  ['Hyundai i30', 'com', 6.0, 50], ['Kia Ceed', 'com', 6.0, 50], ['Audi A3', 'com', 6.1, 50], ['Mercedes Clase A', 'com', 6.3, 43], ['BMW Serie 1', 'com', 6.3, 42], ['Cupra Born', 'com', 0, 0],
+  ['Skoda Octavia', 'ber', 6.0, 45], ['Toyota Camry', 'ber', 5.1, 50], ['Mercedes Clase C', 'ber', 6.8, 66], ['BMW Serie 3', 'ber', 6.8, 59], ['Audi A4', 'ber', 6.6, 54], ['Volkswagen Passat', 'ber', 6.6, 66], ['Tesla Model 3', 'ber', 0, 0],
+  ['Seat Arona', 'suv', 6.0, 40], ['Volkswagen T-Cross', 'suv', 6.0, 40], ['Volkswagen T-Roc', 'suv', 6.5, 50], ['Renault Captur', 'suv', 6.1, 48], ['Peugeot 2008', 'suv', 6.2, 44], ['Dacia Duster', 'suv', 6.8, 50],
+  ['Hyundai Kona', 'suv', 6.2, 50], ['Hyundai Tucson', 'suv', 7.2, 54], ['Kia Sportage', 'suv', 7.2, 54], ['Kia Niro', 'suv', 4.8, 42], ['Kia Stonic', 'suv', 6.1, 45], ['Nissan Qashqai', 'suv', 6.6, 55],
+  ['Nissan Juke', 'suv', 6.3, 46], ['Ford Puma', 'suv', 6.2, 42], ['Ford Kuga', 'suv', 6.9, 54], ['MG ZS', 'suv', 6.9, 48], ['MG HS', 'suv', 7.5, 55], ['Skoda Kamiq', 'suv', 6.1, 50],
+  ['Seat Ateca', 'suv', 6.8, 50], ['Cupra Formentor', 'suv', 7.0, 50], ['Volkswagen Tiguan', 'suv', 7.3, 58], ['Peugeot 3008', 'suv', 6.8, 53], ['Toyota C-HR', 'suv', 5.0, 43], ['Toyota RAV4', 'suv', 5.8, 55],
+  ['Renault Austral', 'suv', 6.0, 55], ['Citroën C4', 'suv', 6.2, 50], ['Opel Mokka', 'suv', 6.1, 44], ['Audi Q3', 'suv', 7.3, 60], ['BMW X1', 'suv', 7.0, 54], ['Mercedes GLA', 'suv', 7.0, 51], ['Jeep Renegade', 'suv', 7.0, 48],
+  ['Citroën Berlingo', 'fur', 6.8, 50], ['Peugeot Rifter', 'fur', 6.8, 50], ['Renault Kangoo', 'fur', 7.0, 54], ['Volkswagen Caddy', 'fur', 6.8, 50], ['Dacia Jogger', 'fur', 6.3, 50], ['Ford Tourneo Connect', 'fur', 6.9, 50],
+  ['Mazda MX-5', 'dep', 6.9, 45], ['Ford Mustang', 'dep', 12.0, 61], ['BMW Serie 4', 'dep', 7.2, 59], ['Toyota GR86', 'dep', 8.8, 50],
+].filter((m) => m[2] > 0);
+const findModels = (q) => { const n = norm(q); if (n.length < 2) return []; const w = n.split(/\s+/); return CAR_MODELS.filter((m) => w.every((x) => norm(m[0]).includes(x))).slice(0, 6); };
+function applyModel(m) {
+  state.car.type = m[1]; state.car.model = m[0];
+  $('consumo').value = m[2].toFixed(1); $('deposito').value = String(m[3]);
+  $('car-model').value = m[0]; $('model-sugg').hidden = true;
+  paintCar(); build3D(); updateGauge(); save();
+}
 const CAR_COLORS = ['#F4F4F2', '#C3C7CC', '#7D848C', '#3A3F45', '#16181B', '#D8C3A0', '#6E4B32', '#7A1F2B', '#D5202A', '#F07F1F', '#F2C200', '#8CC63F', '#2E7D4F', '#18A0A8', '#5AA9E6', '#1F5FBF', '#1B2E5A', '#6B3FA0', '#E86AA6'];
 const ROOF_COLORS = ['', '#16181B', '#F4F4F2', '#3A3F45', '#C3C7CC', '#D5202A', '#1F5FBF'];
 const HEX = /^#[0-9a-f]{6}$/i;
@@ -800,14 +824,44 @@ function carProfile(t, N = 96) {
   const bot = xs.map((x) => { const d = Math.min(h - x, x + h); return t.gc + 0.12 * (1 - Math.min(1, d / 0.35)) ** 2; });
   return { xs, H: Hs, R: Rs, hw, bot, h };
 }
+/* Dibujo lateral: carrocería con degradado, techo y pilares del color elegido, ventanillas separadas, puertas, faros y ruedas con llanta. */
+let carSvgSeq = 0;
 function carSVG() {
-  const t = carType(), p = carProfile(t, 48), S = 22, X = (x) => (62 + x * S).toFixed(1), Y = (y) => (45 - y * S).toFixed(1);
+  const t = carType(), p = carProfile(t, 64), S = 22, X = (x) => (62 + x * S).toFixed(1), Y = (y) => (45 - y * S).toFixed(1);
+  const id = 'cs' + (++carSvgSeq), paint = state.car.color, roofC = state.car.roof || paint;
+  const at = (x) => { let b = 0; for (let i = 1; i < p.xs.length; i++) if (Math.abs(p.xs[i] - x) < Math.abs(p.xs[b] - x)) b = i; return b; };
   const top = p.xs.map((x, i) => `${X(x)} ${Y(p.H[i])}`), bottom = p.xs.map((x, i) => `${X(x)} ${Y(p.bot[i])}`).reverse();
-  const cab = p.xs.map((x, i) => (p.R[i] > p.H[i] + 0.005 ? `${X(x)} ${Y(p.R[i])}` : null)).filter(Boolean);
-  const cabBase = p.xs.map((x, i) => (p.R[i] > p.H[i] + 0.005 ? `${X(x)} ${Y(p.H[i])}` : null)).filter(Boolean).reverse();
+  const cabI = p.xs.map((x, i) => i).filter((i) => p.R[i] > p.H[i] + 0.005);
+  const cab = cabI.map((i) => `${X(p.xs[i])} ${Y(p.R[i])}`), cabBase = cabI.map((i) => `${X(p.xs[i])} ${Y(p.H[i] - 0.02)}`).reverse();
+  // Cristal: la cabina recortada hacia dentro, para que se vean techo y pilares
+  const x0 = t.rear + 0.16, x1 = t.wind - 0.12, gI = cabI.filter((i) => p.xs[i] > x0 && p.xs[i] < x1);
+  const gTop = gI.map((i) => `${X(p.xs[i])} ${Y(Math.max(p.H[i] + 0.06, p.R[i] - 0.075))}`), gBot = gI.map((i) => `${X(p.xs[i])} ${Y(p.H[i] + 0.035)}`).reverse();
+  const bx = (t.rr + t.rf) / 2 - 0.12, bTop = Y(p.R[at(bx)]), bBot = Y(p.H[at(bx)]);
+  const pillars = [bx, ...(t.k === 'fur' ? [t.rr + 0.55] : [])].map((x) => `<rect x="${(+X(x) - 1.2).toFixed(1)}" y="${bTop}" width="2.4" height="${(+bBot - +bTop).toFixed(1)}" fill="${roofC}"/>`).join('');
+  // Puertas y detalles
+  const door = (x) => `<line x1="${X(x)}" y1="${Y(p.H[at(x)] - 0.02)}" x2="${X(x)}" y2="${Y(p.bot[at(x)] + 0.1)}" stroke="#000" stroke-opacity=".22" stroke-width=".7"/>`;
+  const doors = [t.wind - 0.05, bx, ...(t.k !== 'dep' && t.k !== 'urb' ? [t.rear + 0.1] : [])].map(door).join('');
+  const handle = (x) => `<rect x="${(+X(x) - 2.2).toFixed(1)}" y="${(+Y(p.H[at(x)] - 0.12)).toFixed(1)}" width="4.4" height="1.2" rx=".6" fill="#000" opacity=".28"/>`;
   const wf = p.h - 0.82, wr = -p.h + 0.8;
-  const wheel = (x) => `<circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S).toFixed(1)}" fill="var(--ink)"/><circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S * 0.45).toFixed(1)}" fill="#C9CED4"/>`;
-  return `<svg viewBox="0 0 124 48" aria-hidden="true"><path d="M${[...cab, ...cabBase].join('L')}Z" fill="#CFE3F5" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/><path d="M${[...top, ...bottom].join('L')}Z" fill="${state.car.color}" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>${state.car.roof && cab.length ? `<polyline points="${cab.slice(2, -2).join(' ')}" fill="none" stroke="${state.car.roof}" stroke-width="3.6" stroke-linecap="round"/>` : ''}${wheel(wr)}${wheel(wf)}</svg>`;
+  const wheel = (x) => `<circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S + 1.6).toFixed(1)}" fill="#0E1114"/>
+    <circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S).toFixed(1)}" fill="#1D2125"/>
+    <circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S * 0.6).toFixed(1)}" fill="url(#${id}r)"/>
+    <circle cx="${X(x)}" cy="${Y(t.r)}" r="${(t.r * S * 0.16).toFixed(1)}" fill="#7C858F"/>`;
+  const hx = p.h - 0.06, tx = -p.h + 0.04;
+  return `<svg viewBox="0 0 124 48" aria-hidden="true"><defs>
+      <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".45" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient>
+      <linearGradient id="${id}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#9FC3E4"/><stop offset=".55" stop-color="#3E5F7E"/><stop offset="1" stop-color="#22374C"/></linearGradient>
+      <radialGradient id="${id}r"><stop offset="0" stop-color="#E9EDF1"/><stop offset="1" stop-color="#9AA3AD"/></radialGradient></defs>
+    <ellipse cx="62" cy="${(+Y(0) + 0.5).toFixed(1)}" rx="${(t.len / 2 * S).toFixed(1)}" ry="1.6" fill="#000" opacity=".18"/>
+    ${cab.length ? `<path d="M${[...cab, ...cabBase].join('L')}Z" fill="${roofC}"/>` : ''}
+    ${gTop.length > 2 ? `<path d="M${[...gTop, ...gBot].join('L')}Z" fill="url(#${id}g)"/>${pillars}` : ''}
+    <path d="M${[...top, ...bottom].join('L')}Z" fill="${paint}"/>
+    <path d="M${[...top, ...bottom].join('L')}Z" fill="url(#${id}b)"/>
+    <path d="M${p.xs.map((x, i) => `${X(x)} ${Y(p.bot[i] + 0.16)}`).join('L')}" fill="none" stroke="#000" stroke-opacity=".18" stroke-width="1.2"/>
+    ${doors}${handle(t.wind - 0.35)}${handle(bx - 0.3)}
+    <rect x="${(+X(hx) - 3).toFixed(1)}" y="${(+Y(t.nose - 0.1)).toFixed(1)}" width="3.6" height="2" rx="1" fill="#FFF6D8"/>
+    <rect x="${(+X(tx) - 0.4).toFixed(1)}" y="${(+Y(t.belt - 0.1)).toFixed(1)}" width="2.6" height="2.4" rx="1" fill="#E5262E"/>
+    ${wheel(wr)}${wheel(wf)}</svg>`;
 }
 
 /* Modelo 3D: la carrocería y la cabina son superficies lisas generadas por secciones a lo largo del coche. */
@@ -951,7 +1005,8 @@ function paintCar() {
   document.querySelectorAll('.veh').forEach((el) => { el.innerHTML = carSVG(); });
   document.querySelectorAll('.pump:empty').forEach((el) => { el.innerHTML = PUMP_SVG; });
   $('car-types').innerHTML = CAR_TYPES.map((t) => `<button type="button" class="chip" role="radio" aria-checked="${t.k === state.car.type}" data-type="${t.k}">${t.n}</button>`).join('');
-  $('car-eg').textContent = `${carType().eg} · ${fmt(carType().len, 1)} m de largo`;
+  $('car-eg').textContent = state.car.model ? `${state.car.model} · ${carType().n.toLowerCase()}` : `${carType().eg} · ${fmt(carType().len, 1)} m de largo`;
+  if (document.activeElement !== $('car-model')) $('car-model').value = state.car.model || '';
   const custom = (attr, val, on) => `<label class="sw-custom ${on ? 'on' : ''}" title="Otro color" style="${on ? `background:${val}` : ''}"><input type="color" ${attr} value="${val || '#888888'}" aria-label="Elegir otro color"></label>`;
   $('car-colors').innerHTML = CAR_COLORS.map((c) => `<button type="button" role="radio" aria-checked="${c === state.car.color}" aria-label="Color ${c}" data-color="${c}" style="background:${c}"></button>`).join('')
     + custom('data-pick="body"', state.car.color, !CAR_COLORS.includes(state.car.color));
@@ -1024,8 +1079,8 @@ function showQ(i, dir = 1) {
   $('btn-editcar').hidden = !(state.carDone && !state.editing);
   if (QS[i] === 'tucoche') {
     const t = carType(), fuelName = FUELS.find((f) => f.k === state.fuel).n;
-    $('mycar-name').textContent = t.n;
-    $('mycar-sub').textContent = `${fuelName} · depósito de ${fmt(readCar().tank, 0)} L`;
+    $('mycar-name').textContent = state.car.model || t.n;
+    $('mycar-sub').textContent = `${state.car.model ? t.n + ' · ' : ''}${fuelName} · depósito de ${fmt(readCar().tank, 0)} L`;
     $('consumo2').value = (parseFloat($('consumo').value) || t.cons).toFixed(1);
   }
   if (QS[i] === 'coche') start3D(); else stop3D();
@@ -1053,7 +1108,7 @@ function restore() {
     if (FUELS.some((f) => f.k === d.fuel)) state.fuel = d.fuel;
     for (const k of FIELDS) if (d[k] != null && d[k] !== '') $(k).value = d[k];
     if (d.discounts && typeof d.discounts === 'object') state.discounts = d.discounts;
-    if (d.car && HEX.test(d.car.color)) state.car = { type: CAR_TYPES.some((t) => t.k === d.car.type) ? d.car.type : 'com', color: d.car.color, roof: HEX.test(d.car.roof || '') ? d.car.roof : '' };
+    if (d.car && HEX.test(d.car.color)) state.car = { type: CAR_TYPES.some((t) => t.k === d.car.type) ? d.car.type : 'com', color: d.car.color, roof: HEX.test(d.car.roof || '') ? d.car.roof : '', model: typeof d.car.model === 'string' ? d.car.model.slice(0, 60) : '' };
     if (d.eat === 'yes' || d.eat === 'no') state.eat = d.eat;
     if (THRESHOLDS.some((t) => Math.abs(t.f - d.frac) < 0.01)) state.frac = d.frac;
     if (DETOURS.some((x) => x.k === d.detour)) state.detour = d.detour;
@@ -1723,7 +1778,7 @@ function renderResult() {
       const row = (k, label, val, cls = '') => `<div class="sr ${cls}" style="--d:${(0.55 + k * 0.32).toFixed(2)}s"><span>${label}</span><b>${val}</b></div>`;
       return `<div class="sl-stop"><section class="stopA">
         <div class="st-head"><div class="st-look">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)}</p></div></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
-        <p class="st-when sr" style="--d:.1s"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>Llegas a las <b>${hhmm(c.eta)}</b> con <b>${fmt(lg.arrive, 0)} L</b></span></p>
+        <div class="st-when sr" style="--d:.1s"><div><small>Llegas a las</small><b>${hhmm(c.eta)}</b></div><div><small>En el depósito</small><b>${fmt(lg.arrive, 0)} L</b></div></div>
         <div class="st-story">${tankSVG(lg, car)}
           <div class="st-rows">
             ${row(0, lg.full ? 'Llenas' : 'Echas', `+${fmt(lg.L, 0)} L`, 'add')}
@@ -2022,7 +2077,15 @@ function init() {
 
   const auto = () => setTimeout(() => { if (state.panel === 2 && state.q < QS.length - 1) showQ(state.q + 1, 1); }, 260);
   $('fuels').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) { state.fuel = b.dataset.k; updateGauge(); save(); auto(); } });
-  $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; paintCar(); build3D(); updateGauge(); save(); } });
+  $('car-model').addEventListener('input', () => {
+    const list = findModels($('car-model').value), u = $('model-sugg');
+    u.innerHTML = list.map((m, i) => `<li data-m="${CAR_MODELS.indexOf(m)}">${esc(m[0])}<small>${CAR_TYPES.find((t) => t.k === m[1]).n} · ${fmt(m[2], 1)} L/100 km · ${m[3]} L</small></li>`).join('')
+      || ($('car-model').value.trim().length >= 2 ? '<li class="none">No lo tengo en la lista: elige la carrocería más parecida</li>' : '');
+    u.hidden = !u.innerHTML;
+  });
+  $('model-sugg').addEventListener('pointerdown', (e) => { const li = e.target.closest('[data-m]'); if (li) { e.preventDefault(); applyModel(CAR_MODELS[+li.dataset.m]); $('car-model').blur(); } });
+  $('car-model').addEventListener('blur', () => setTimeout(() => { $('model-sugg').hidden = true; }, 150));
+  $('car-types').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) { state.car.type = b.dataset.type; state.car.model = ''; $('car-model').value = ''; paintCar(); build3D(); updateGauge(); save(); } });
   $('car-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-color]'); if (b) { state.car.color = b.dataset.color; paintCar(); build3D(); save(); } });
   $('roof-colors').addEventListener('click', (e) => { const b = e.target.closest('[data-roof]'); if (b) { state.car.roof = b.dataset.roof; paintCar(); build3D(); save(); } });
   const onPick = (e) => {

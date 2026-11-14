@@ -775,3 +775,18 @@ a.sl-where { color: inherit; text-decoration: none; }
 /* Depósito nuevo */
 .tankA .tk-t { font: 800 17px var(--f-display); fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,.18); stroke-width: 2px; }
 .st-story { grid-template-columns: 112px 1fr; }
+/* Llegada: dos fichas */
+.st-when { display: grid !important; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 !important; background: none !important; margin: 14px 0 6px; }
+.st-when > div { background: var(--fill, var(--bg)); border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.st-when small { font: 500 13px var(--f-body); color: var(--muted); }
+.st-when b { font: 700 30px/1.05 var(--f-display); letter-spacing: -.02em; color: var(--ink); margin: 0; }
+.st-when > div:first-child b { color: var(--blue); }
+/* Buscador de modelo */
+.modelsearch { position: relative; display: flex; align-items: center; gap: 8px; background: var(--fill, var(--bg)); border-radius: 12px; padding: 0 12px; }
+.modelsearch svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.modelsearch input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 500 17px var(--f-body); min-height: 48px; outline: none; }
+.modelsearch .sugg { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; }
+.modelsearch .sugg li { display: flex; flex-direction: column; }
+.modelsearch .sugg li small { color: var(--muted); font-size: 13px; }
+.modelsearch .sugg li.none { color: var(--muted); font-size: 14px; cursor: default; }
+[data-q="coche"] .modelsearch + .hint { margin: 6px 2px 10px; }
