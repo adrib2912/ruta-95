@@ -474,20 +474,39 @@ async function fetchRoute(points, avoidTolls = false) {
       if (/^[A-Z]{1,3}-?\d+/.test(t)) refs.set(t, (refs.get(t) || 0) + st.distance);
     }
     const main = [...refs].filter(([, d]) => d > r.distance * 0.08).sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
-    route.tollKm = 0; route.tollSteps = [];
-    const tolls = new Set();
+    // Tramos de unos 2 km con la carretera, su punto medio y si OSRM los marca como peaje; el peaje se decide luego con la tabla
+    route.segs = [];
     let at = 0;
     for (const l of r.legs || []) for (const st of l.steps || []) {
-      if ((st.intersections || []).some((x) => (x.classes || []).includes('toll'))) {
-        route.tollKm += st.distance / 1000;
-        const t = String(st.ref || '').split(';')[0].trim();
-        if (t) tolls.add(t);
-        const loc = (st.intersections[0] || {}).location || (st.maneuver || {}).location || [0, 0];
-        const g = st.geometry && st.geometry.coordinates, mid = g && g.length ? g[g.length >> 1] : loc;
-        route.tollSteps.push({ refs: String(st.ref || '').split(';').map((x) => x.trim().toUpperCase()).filter(Boolean), km: st.distance / 1000, lat: mid[1], lon: mid[0], atKm: at / 1000 + st.distance / 2000 });
+      const refs = String(st.ref || '').split(';').map((x) => x.trim().toUpperCase()).filter(Boolean);
+      const toll = (st.intersections || []).some((x) => (x.classes || []).includes('toll'));
+      const g = (st.geometry && st.geometry.coordinates) || [];
+      if ((refs.length || toll) && g.length < 2 && st.distance > 0) {
+        // Sin trazado del paso: se trocea igual, situando cada trozo sobre la ruta
+        const n = Math.max(1, Math.round(st.distance / 2000));
+        for (let j = 0; j < n; j++) {
+          const km = st.distance / 1000 / n, atKm = at / 1000 + km * (j + 0.5), p = pointAtKm(route, Math.min(route.distKm, atKm));
+          route.segs.push({ refs, toll, km, lat: p.lat, lon: p.lon, atKm });
+        }
+      } else if ((refs.length || toll) && st.distance > 0) {
+        let acc = 0, start = 0, sLat = g[0][1], sLon = g[0][0];
+        const lens = [];
+        for (let i = 1; i < g.length; i++) lens.push(hav(g[i - 1][1], g[i - 1][0], g[i][1], g[i][0]));
+        const k = st.distance / 1000 / Math.max(1e-6, lens.reduce((a, b) => a + b, 0));
+        let chunk = 0, cLat = 0, cLon = 0, n = 0;
+        for (let i = 1; i < g.length; i++) {
+          chunk += lens[i - 1] * k; cLat += g[i][1]; cLon += g[i][0]; n++;
+          if (chunk >= 2 || i === g.length - 1) {
+            route.segs.push({ refs, toll, km: chunk, lat: cLat / n, lon: cLon / n, atKm: (at / 1000) + acc + chunk / 2 });
+            acc += chunk; chunk = 0; cLat = 0; cLon = 0; n = 0;
+          }
+        }
       }
       at += st.distance;
     }
+    const tc = tollCost(route, new Date(), false);
+    route.tollKm = tc.km;
+    const tolls = new Set(tc.parts.map((g) => g.ref).filter(Boolean));
     route.tollRefs = [...tolls].slice(0, 3);
     route.name = main.length ? [...refs.keys()].filter((k) => main.includes(k)).join(' · ')
       : [...new Set((r.legs || []).flatMap((l) => String(l.summary || '').split(',').map((t) => t.trim()).filter(Boolean)))].slice(0, 2).join(', ');
@@ -502,56 +521,71 @@ async function fetchRoute(points, avoidTolls = false) {
    c: punto central del tramo, para distinguir tramos con el mismo nombre. Revisar cada enero. */
 const TOLLS_YEAR = 2026;
 const TOLLS = [
-  { r: 'AG-57', n: 'Puxeiros-Baiona', c: [42.16, -8.75], km: 25.2, p: [1.75] },
-  { r: 'AG-55', n: 'A Coruña-Carballo', c: [43.25, -8.55], km: 32.6, p: [2.6] },
-  { r: 'AP-8', n: 'Variante Sur de Bilbao', c: [43.24, -2.95], km: 19.4, p: [2.05] },
-  { r: 'AP-8', n: 'Bilbao-Behobia', c: [43.25, -2.25], km: 105.6, p: [16.96] },
-  { r: 'AP-7', n: 'Cartagena-Vera', c: [37.45, -1.45], km: 99.04, p: [11.35, 10.15], k: 'seitt' },
-  { r: 'AP-7', n: 'Alicante-Cartagena', c: [37.95, -0.8], km: 76.6, p: [10.2, 5.7], k: 'temp' },
-  { r: 'AP-7', n: 'Málaga-Estepona', c: [36.55, -4.8], km: 82.66, p: [15.5, 9.55], k: 'temp' },
-  { r: 'AP-7', n: 'Estepona-Guadiaro', c: [36.36, -5.25], km: 22.48, p: [4.05, 2.45], k: 'temp' },
-  { r: 'R-2', n: 'Madrid-Guadalajara', c: [40.55, -3.35], km: 55.1, p: [6.4, 5.7], k: 'seitt' },
-  { r: 'R-3', n: 'Madrid-Arganda', c: [40.35, -3.5], km: 29.3, p: [3.4, 3.05], k: 'seitt' },
-  { r: 'R-4', n: 'Madrid-Ocaña', c: [40.1, -3.6], km: 54.1, p: [6.25, 5.55], k: 'seitt' },
-  { r: 'R-5', n: 'Madrid-Navalcarnero', c: [40.3, -3.9], km: 31.5, p: [3.65, 3.25], k: 'seitt' },
-  { r: 'M-12', n: 'Aeropuerto de Barajas', c: [40.5, -3.6], km: 8.4, p: [1.55, 1.4], k: 'seitt' },
-  { r: 'AP-36', n: 'Ocaña-La Roda', c: [39.6, -2.8], km: 123.2, p: [14.15, 12.6], k: 'seitt' },
-  { r: 'AP-41', n: 'Madrid-Toledo', c: [40.1, -3.95], km: 51.8, p: [5.95, 5.3], k: 'seitt' },
-  { r: 'AP-9', n: 'Ferrol-Tui', c: [42.8, -8.55], km: 219.6, p: [28.1] },
-  { r: 'AP-15', n: 'Tudela-Irurzun', c: [42.5, -1.7], km: 112.6, p: [14.05] },
-  { r: 'AP-53', n: 'Santiago-Alto de Santo Domingo', c: [42.75, -8.2], km: 56.6, p: [7.25] },
-  { r: 'AP-51', n: 'Ávila-Villacastín', c: [40.68, -4.5], km: 23.1, p: [2.95, 1.75, 1.1], k: 'hora' },
-  { r: 'AP-61', n: 'Segovia-San Rafael', c: [40.85, -4.15], km: 27.68, p: [4.95, 3.05, 2.0], k: 'hora' },
-  { r: 'AP-68', n: 'Bilbao-Zaragoza', c: [42.5, -2.3], km: 294.42, p: [39.9], until: '2026-11-10' },
-  { r: 'AP-71', n: 'León-Astorga', c: [42.55, -5.85], km: 37.7, p: [6.2, 2.5], k: 'noche' },
-  { r: 'AP-66', n: 'León-Campomanes', c: [42.95, -5.75], km: 77.76, p: [16.2] },
-  { r: 'AP-1', n: 'Vitoria-Eibar', c: [43.0, -2.55], km: 46.13, p: [10.04] },
-  { r: 'AP-6', n: 'Villalba-Adanero', c: [40.75, -4.15], km: 69.6, p: [15.7] },
-  { r: 'AP-46', n: 'Alto de las Pedrizas-Málaga', c: [36.8, -4.4], km: 28.04, p: [6.6, 4.35], k: 'temp' },
-  { r: 'C-32', n: 'Castelldefels-El Vendrell', c: [41.25, 1.7], km: 56.3, p: [13.45] },
-  { r: 'C-16', n: 'Sant Cugat-Manresa', c: [41.6, 1.95], km: 43.1, p: [12.95, 7.24], k: 'viat' },
-  { r: 'C-16', n: 'Túnel de Vallvidrera', c: [41.43, 2.1], km: 16.7, p: [5.28, 4.7] },
-  { r: 'C-16', n: 'Túnel del Cadí', c: [42.28, 1.75], km: 29.7, p: [14.56] },
-  { r: '', n: 'Túneles de Artxanda', c: [43.28, -2.93], km: 3.0, p: [1.55] },
+  { r: 'AG-57', n: 'Puxeiros-Baiona', w: [[42.18, -8.66], [42.11, -8.84]], km: 25.2, p: [1.75] },
+  { r: 'AG-55', n: 'A Coruña-Carballo', w: [[43.34, -8.43], [43.21, -8.69]], km: 32.6, p: [2.6] },
+  { r: 'AP-8', n: 'Variante Sur de Bilbao', w: [[43.21, -2.89], [43.26, -2.98], [43.32, -3.03]], km: 19.4, p: [2.05] },
+  { r: 'AP-8', n: 'Bilbao-Behobia', w: [[43.24, -2.88], [43.2, -2.6], [43.24, -2.3], [43.29, -2.0], [43.34, -1.76]], km: 105.6, p: [16.96] },
+  { r: 'AP-7', n: 'Cartagena-Vera', w: [[37.62, -1.0], [37.4, -1.55], [37.24, -1.86]], km: 99.04, p: [11.35, 10.15], k: 'seitt' },
+  { r: 'AP-7', n: 'Alicante-Cartagena', w: [[38.25, -0.7], [37.97, -0.75], [37.66, -1.0]], km: 76.6, p: [10.2, 5.7], k: 'temp' },
+  { r: 'AP-7', n: 'Málaga-Estepona', w: [[36.66, -4.6], [36.52, -4.9], [36.45, -5.12]], km: 82.66, p: [15.5, 9.55], k: 'temp' },
+  { r: 'AP-7', n: 'Estepona-Guadiaro', w: [[36.45, -5.12], [36.3, -5.3]], km: 22.48, p: [4.05, 2.45], k: 'temp' },
+  { r: 'R-2', n: 'Madrid-Guadalajara', w: [[40.47, -3.6], [40.63, -3.2]], km: 55.1, p: [6.4, 5.7], k: 'seitt' },
+  { r: 'R-3', n: 'Madrid-Arganda', w: [[40.4, -3.62], [40.3, -3.43]], km: 29.3, p: [3.4, 3.05], k: 'seitt' },
+  { r: 'R-4', n: 'Madrid-Ocaña', w: [[40.33, -3.65], [39.95, -3.5]], km: 54.1, p: [6.25, 5.55], k: 'seitt' },
+  { r: 'R-5', n: 'Madrid-Navalcarnero', w: [[40.36, -3.75], [40.28, -4.02]], km: 31.5, p: [3.65, 3.25], k: 'seitt' },
+  { r: 'M-12', n: 'Aeropuerto de Barajas', w: [[40.52, -3.65], [40.47, -3.56]], km: 8.4, p: [1.55, 1.4], k: 'seitt' },
+  { r: 'AP-36', n: 'Ocaña-La Roda', w: [[39.95, -3.5], [39.6, -2.85], [39.21, -2.15]], km: 123.2, p: [14.15, 12.6], k: 'seitt' },
+  { r: 'AP-41', n: 'Madrid-Toledo', w: [[40.3, -3.72], [39.9, -4.0]], km: 51.8, p: [5.95, 5.3], k: 'seitt' },
+  { r: 'AP-9', n: 'Ferrol-Tui', w: [[43.48, -8.23], [43.33, -8.4], [42.88, -8.54], [42.43, -8.64], [42.23, -8.7], [42.05, -8.64]], km: 219.6, p: [28.1] },
+  { r: 'AP-15', n: 'Tudela-Irurzun', w: [[42.06, -1.6], [42.8, -1.65], [42.92, -1.83]], km: 112.6, p: [14.05] },
+  { r: 'AP-53', n: 'Santiago-Alto de Santo Domingo', w: [[42.85, -8.5], [42.62, -8.05]], km: 56.6, p: [7.25] },
+  { r: 'AP-51', n: 'Ávila-Villacastín', w: [[40.65, -4.68], [40.78, -4.41]], km: 23.1, p: [2.95, 1.75, 1.1], k: 'hora' },
+  { r: 'AP-61', n: 'Segovia-San Rafael', w: [[40.71, -4.19], [40.93, -4.11]], km: 27.68, p: [4.95, 3.05, 2.0], k: 'hora' },
+  { r: 'AP-68', n: 'Bilbao-Zaragoza', w: [[43.22, -2.9], [42.69, -2.95], [42.46, -2.45], [41.65, -0.95]], km: 294.42, p: [39.9], until: '2026-11-10' },
+  { r: 'AP-71', n: 'León-Astorga', w: [[42.55, -5.6], [42.46, -6.05]], km: 37.7, p: [6.2, 2.5], k: 'noche' },
+  { r: 'AP-66', n: 'León-Campomanes', w: [[42.6, -5.6], [43.1, -5.83]], km: 77.76, p: [16.2] },
+  { r: 'AP-1', n: 'Vitoria-Eibar', w: [[42.85, -2.67], [43.18, -2.47]], km: 46.13, p: [10.04] },
+  { r: 'AP-6', n: 'Villalba-Adanero', w: [[40.63, -4.0], [40.71, -4.19], [40.94, -4.6]], km: 69.6, p: [15.7] },
+  { r: 'AP-46', n: 'Alto de las Pedrizas-Málaga', w: [[36.97, -4.47], [36.75, -4.45]], km: 28.04, p: [6.6, 4.35], k: 'temp' },
+  { r: 'C-32', n: 'Castelldefels-El Vendrell', w: [[41.28, 1.98], [41.24, 1.8], [41.22, 1.53]], km: 56.3, p: [13.45] },
+  { r: 'C-16', n: 'Sant Cugat-Manresa', w: [[41.47, 2.07], [41.57, 2.0], [41.72, 1.83]], km: 43.1, p: [12.95, 7.24], k: 'viat' },
+  { r: 'C-16', n: 'Túnel de Vallvidrera', w: [[41.41, 2.13], [41.45, 2.08]], km: 16.7, p: [5.28, 4.7] },
+  { r: 'C-16', n: 'Túnel del Cadí', w: [[42.25, 1.86], [42.31, 1.73]], km: 29.7, p: [14.56] },
+  { r: '', n: 'Túneles de Artxanda', w: [[43.27, -2.93], [43.29, -2.94]], km: 3.0, p: [1.55] },
 ];
 const TOLL_AVG = 0.12; // €/km para un tramo de peaje que no está en la tabla
-/* Peaje estimado de una ruta, con la hora a la que pasas por cada tramo. */
+/* Distancia en km de un punto a un trazado de puntos de paso (proyección plana local, suficiente a esta escala) */
+function distToLine(lat, lon, w) {
+  const kx = 111.32 * Math.cos(lat * Math.PI / 180), ky = 110.57;
+  let best = Infinity;
+  for (let i = 0; i < w.length - 1; i++) {
+    const ax = (w[i][1] - lon) * kx, ay = (w[i][0] - lat) * ky, bx = (w[i + 1][1] - lon) * kx, by = (w[i + 1][0] - lat) * ky;
+    const dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy;
+    const t = L2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / L2)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+const TOLL_TOL = 6; // km de tolerancia alrededor del trazado de cada autopista
+/* Peaje estimado de una ruta: cada tramo de 2 km se asigna a la autopista de peaje de la tabla por nombre y ubicación,
+   con la tarifa que toca a la hora a la que pasas. Lo que OSRM marca como peaje y no está en la tabla se estima a 0,12 €/km. */
 function tollCost(route, depart, tag) {
-  const out = { eur: 0, parts: [], notes: new Set(), guess: false };
-  if (!route || !route.tollSteps || !route.tollSteps.length) return out;
+  const out = { eur: 0, km: 0, parts: [], notes: new Set(), guess: false };
+  if (!route || !route.segs || !route.segs.length) return out;
   const by = new Map();
-  for (const st of route.tollSteps) {
+  for (const st of route.segs) {
     let best = null, bd = Infinity;
     for (const e of TOLLS) {
-      if (e.r ? !st.refs.includes(e.r) : st.refs.length) continue;
-      const d = hav(st.lat, st.lon, e.c[0], e.c[1]);
-      if (d < bd && d <= e.km / 2 + 25) { bd = d; best = e; }
+      if (e.r ? !st.refs.includes(e.r) : !st.toll) continue;
+      const d = distToLine(st.lat, st.lon, e.w);
+      if (d < bd && d <= (e.r ? TOLL_TOL : 1.5)) { bd = d; best = e; }
     }
+    if (!best && !st.toll) continue;
     const t = new Date(depart.getTime() + (st.atKm / route.distKm) * route.durMin * 60000);
     const key = best ? best.n : 'otros';
     let g = by.get(key);
     if (!g) by.set(key, (g = { e: best, ref: best ? best.r : st.refs[0] || '', km: 0, eur: 0, free: '' }));
-    g.km += st.km;
+    g.km += st.km; out.km += st.km;
     if (!best) { g.eur += st.km * TOLL_AVG; out.guess = true; continue; }
     const e = best, h = t.getHours(), m = t.getMonth() + 1, wd = t.getDay() >= 1 && t.getDay() <= 5;
     let total = e.p[0];
@@ -567,6 +601,7 @@ function tollCost(route, depart, tag) {
   }
   for (const g of by.values()) {
     if (g.cap != null) g.eur = Math.min(g.eur, g.cap);
+    if (g.km < 1 && !g.e) continue;   // restos sueltos marcados como peaje sin sentido
     out.eur += g.eur;
     out.parts.push(g);
   }
@@ -1482,7 +1517,7 @@ function renderResult() {
   }
   if (P.route.tollKm >= 1) {
     const t = tollOf(P.route), n = tollNotes(t);
-    infos.push(`${t.eur >= 0.05 ? `Peaje estimado: unos ${eurR((t.eur))}` : 'Peaje: gratis a la hora a la que pasas'} (${t.parts.map((g) => `${esc(g.ref || g.e.n)} ${g.e ? esc(g.e.n) : ''}, ${fmt(g.km, 0)} km`).join('; ')}).${n.length ? ' ' + n.map((x) => x[0].toUpperCase() + x.slice(1)).join('. ') + '.' : ''} Tarifas de ${TOLLS_YEAR} para turismos; el importe exacto depende de dónde entres y salgas.`);
+    infos.push(`${t.eur >= 0.05 ? `Peaje estimado: unos ${eurR((t.eur))}` : 'Peaje: gratis a la hora a la que pasas'} (${t.parts.map((g) => `${g.e ? esc([g.ref, g.e.n].filter(Boolean).join(' ')) : esc(g.ref || 'otro tramo')}, ${fmt(g.km, 0)} km`).join('; ')}).${n.length ? ' ' + n.map((x) => x[0].toUpperCase() + x.slice(1)).join('. ') + '.' : ''} Tarifas de ${TOLLS_YEAR} para turismos; el importe exacto depende de dónde entres y salgas.`);
     const c = tollCompare(P.route, state.routes);
     if (c) infos.push(c);
   }
