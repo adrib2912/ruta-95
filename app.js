@@ -1318,6 +1318,8 @@ const isDark = () => {
 };
 const smooth = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 /* Mapas vectoriales de OpenFreeMap (gratis, sin clave) dibujados con MapLibre; si no cargan, los de OpenStreetMap de siempre */
+let glOk = null;
+const hasWebGL = () => { if (glOk == null) { try { const c = document.createElement('canvas'); glOk = !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (_) { glOk = false; } } return glOk; };
 const MAP_STYLE = () => 'https://tiles.openfreemap.org/styles/' + (isDark() ? 'fiord' : 'positron');
 function baseMap(id) {
   const map = L.map(id, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, zoomSnap: 0.25 });
@@ -1327,7 +1329,7 @@ function baseMap(id) {
   }).addTo(map);
   let vec = null;
   try {
-    if (L.maplibreGL && window.maplibregl) {
+    if (L.maplibreGL && window.maplibregl && hasWebGL()) {
       vec = L.maplibreGL({ style: MAP_STYLE(), attribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>', interactive: false }).addTo(map);
       // Si el estilo no llega en unos segundos o el móvil no puede con WebGL, se vuelve al mapa de siempre
       const gl = vec.getMaplibreMap && vec.getMaplibreMap();
