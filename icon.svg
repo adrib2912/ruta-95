@@ -1,1 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22324F"/><stop offset="1" stop-color="#0B1424"/></linearGradient></defs><rect width="512" height="512" rx="114" fill="url(#bg)"/><g transform="translate(76 70) scale(3.6)"><defs><clipPath id="sh-i"><path d="M10 9C26 3 40 4 50 12C60 4 74 3 90 9C96 30 97 50 90 66C82 84 66 92 50 98C34 92 18 84 10 66C3 50 4 30 10 9Z" transform="translate(50 52) scale(.84) translate(-50 -52)"/></clipPath></defs><path d="M10 9C26 3 40 4 50 12C60 4 74 3 90 9C96 30 97 50 90 66C82 84 66 92 50 98C34 92 18 84 10 66C3 50 4 30 10 9Z" fill="#fff" stroke="#0B1424" stroke-opacity=".22" stroke-width="2"/><g clip-path="url(#sh-i)"><rect width="100" height="100" fill="#1D4FA8"/><rect width="100" height="33" fill="#D7232C"/><rect y="33" width="100" height="3.2" fill="#fff"/></g><text x="50" y="26.5" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-weight="800" font-size="13" letter-spacing="1.2" fill="#fff">RUTA</text><text x="50" y="78" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-weight="800" font-size="42" letter-spacing="-1" fill="#fff">95</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs>
+<radialGradient id="bgb" cx=".5" cy=".32" r=".8"><stop offset="0" stop-color="#2B4470"/><stop offset=".6" stop-color="#121D33"/><stop offset="1" stop-color="#070C17"/></radialGradient></defs>
+<rect width="1024" height="1024" rx="228" fill="url(#bgb)"/>
+<ellipse cx="512" cy="850" rx="240" ry="30" fill="#000" opacity=".35"/>
+<defs>
+ <linearGradient id="brim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#C9D2DC"/><stop offset="1" stop-color="#F7F9FB"/></linearGradient>
+ <linearGradient id="bblue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F6BD6"/><stop offset="1" stop-color="#123A86"/></linearGradient>
+ <linearGradient id="bred" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4474B"/><stop offset="1" stop-color="#B5121D"/></linearGradient>
+ <linearGradient id="bgl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+ <clipPath id="bc"><path d="M15 5.5Q50 1.5 85 5.5Q93 6.5 93 14.5V48C93 73 75 89 50 98C25 89 7 73 7 48V14.5Q7 6.5 15 5.5Z" transform="translate(50 52) scale(.86) translate(-50 -52)"/></clipPath>
+ <filter id="bsh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="3" stdDeviation="3.2" flood-color="#000" flood-opacity="0.55"/></filter>
+ <filter id="bts"><feDropShadow dx="0" dy="1" stdDeviation=".8" flood-color="#06183F" flood-opacity=".45"/></filter>
+</defs>
+<g transform="translate(192 170) scale(6.4)">
+ <path d="M15 5.5Q50 1.5 85 5.5Q93 6.5 93 14.5V48C93 73 75 89 50 98C25 89 7 73 7 48V14.5Q7 6.5 15 5.5Z" fill="url(#brim)" filter="url(#bsh)"/>
+ <path d="M15 5.5Q50 1.5 85 5.5Q93 6.5 93 14.5V48C93 73 75 89 50 98C25 89 7 73 7 48V14.5Q7 6.5 15 5.5Z" fill="none" stroke="#000" stroke-opacity=".12" stroke-width=".6"/>
+ <g clip-path="url(#bc)">
+  <rect width="100" height="100" fill="url(#bblue)"/>
+  <rect width="100" height="33" fill="url(#bred)"/>
+  <rect y="33" width="100" height="2.6" fill="#fff"/>
+  <path d="M0 0H100V44C70 38 30 38 0 46Z" fill="url(#bgl)"/>
+ </g>
+ 
+ <text x="50" y="25.2" text-anchor="middle" font-family="Inter Display, Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-weight="800" font-size="13" letter-spacing="2" fill="#fff">RUTA</text>
+ <text class="n95" x="50" y="77" text-anchor="middle" font-family="Inter Display, Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-weight="900" font-size="42" fill="#fff" filter="url(#bts)">95</text>
+</g></svg>

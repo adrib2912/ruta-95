@@ -425,7 +425,7 @@ async function loadStations() {
   }
   state.places = [...idx.values()].map((e) => ({ name: e.name, sub: e.sub, lat: median(e.lats), lon: median(e.lons), n: e.lats.length, k: norm(e.name) }));
   const src = snap.live ? 'descargados ahora del Ministerio' : ageH < 1 ? 'copia de hace menos de 1 h' : `copia de hace ${fmt(ageH, 0)} h`;
-  $('data-date').textContent = `Precios del ${snap.fecha} (${src}) · ${fmt(snap.e.length, 0)} estaciones`;
+  $('data-date').textContent = `Precios del ${String(snap.fecha).replace(/:\d\d$/, '').replace(' ', ' a las ')} · ${fmt(snap.e.length, 0)} gasolineras (${src})`;
 }
 
 const geoCache = new Map();
@@ -1683,6 +1683,30 @@ function init() {
     paintSkins(); paintTheme(); save(); state.mapDirty = true;
   });
 
+  // Tema en los ajustes: automático (el del sistema), claro u oscuro
+  const paintThemeSeg = () => { const cur = document.documentElement.dataset.theme || ''; document.querySelectorAll('[data-th]').forEach((b) => b.setAttribute('aria-checked', b.dataset.th === cur)); };
+  $('theme-seg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-th]'); if (!b) return;
+    const r = document.documentElement;
+    if (r.dataset.skin === 'asfalto' || r.dataset.skin === 'ticket') delete r.dataset.skin;
+    if (b.dataset.th) r.dataset.theme = b.dataset.th; else delete r.dataset.theme;
+    paintTheme(); paintSkins(); paintThemeSeg(); save(); state.mapDirty = true;
+    if (state.panel === 1) renderRoutes();
+  });
+  $('btn-theme').addEventListener('click', paintThemeSeg);
+  $('skins').addEventListener('click', paintThemeSeg);
+  // Hoja de ajustes
+  const sheet = $('sheet');
+  const openSheet = () => { paintThemeSeg(); sheet.hidden = false; sheet.classList.remove('closing'); document.body.classList.add('locked'); sheet.querySelector('.sheet-done').focus({ preventScroll: true }); };
+  const closeSheet = () => {
+    if (sheet.hidden) return;
+    const fin = () => { sheet.hidden = true; sheet.classList.remove('closing'); document.body.classList.remove('locked'); updateGauge(); $('btn-settings').focus({ preventScroll: true }); };
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return fin();
+    sheet.classList.add('closing'); setTimeout(fin, 210);
+  };
+  $('btn-settings').addEventListener('click', openSheet);
+  sheet.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closeSheet(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
   $('strip').addEventListener('click', (e) => { if (e.target.closest('#btn-replay')) playTour(); });
   $('t-plan').addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) { e.preventDefault(); go(+b.dataset.go); } });
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) showTab(b.dataset.tab); });
