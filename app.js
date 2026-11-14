@@ -474,20 +474,139 @@ async function fetchRoute(points, avoidTolls = false) {
       if (/^[A-Z]{1,3}-?\d+/.test(t)) refs.set(t, (refs.get(t) || 0) + st.distance);
     }
     const main = [...refs].filter(([, d]) => d > r.distance * 0.08).sort((x, y) => y[1] - x[1]).slice(0, 3).map((x) => x[0]);
-    route.tollKm = 0;
+    route.tollKm = 0; route.tollSteps = [];
     const tolls = new Set();
+    let at = 0;
     for (const l of r.legs || []) for (const st of l.steps || []) {
       if ((st.intersections || []).some((x) => (x.classes || []).includes('toll'))) {
         route.tollKm += st.distance / 1000;
         const t = String(st.ref || '').split(';')[0].trim();
         if (t) tolls.add(t);
+        const loc = (st.intersections[0] || {}).location || (st.maneuver || {}).location || [0, 0];
+        const g = st.geometry && st.geometry.coordinates, mid = g && g.length ? g[g.length >> 1] : loc;
+        route.tollSteps.push({ refs: String(st.ref || '').split(';').map((x) => x.trim().toUpperCase()).filter(Boolean), km: st.distance / 1000, lat: mid[1], lon: mid[0], atKm: at / 1000 + st.distance / 2000 });
       }
+      at += st.distance;
     }
     route.tollRefs = [...tolls].slice(0, 3);
     route.name = main.length ? [...refs.keys()].filter((k) => main.includes(k)).join(' · ')
       : [...new Set((r.legs || []).flatMap((l) => String(l.summary || '').split(',').map((t) => t.trim()).filter(Boolean)))].slice(0, 2).join(', ');
     return route;
   });
+}
+
+/* ---------- Peajes ----------
+   Tarifas 2026 para turismos (informe de Automovilistas Europeos Asociados, AEA, que recoge las tarifas oficiales).
+   p: precio del recorrido completo; si hay varios, según la regla: seitt (efectivo / telepeaje, y gratis de 0 a 6 h),
+   noche (día / noche, 23 a 7 h), hora (punta / normal / valle), temp (temporada alta / baja), viat (normal / Vía-T en laborable).
+   c: punto central del tramo, para distinguir tramos con el mismo nombre. Revisar cada enero. */
+const TOLLS_YEAR = 2026;
+const TOLLS = [
+  { r: 'AG-57', n: 'Puxeiros-Baiona', c: [42.16, -8.75], km: 25.2, p: [1.75] },
+  { r: 'AG-55', n: 'A Coruña-Carballo', c: [43.25, -8.55], km: 32.6, p: [2.6] },
+  { r: 'AP-8', n: 'Variante Sur de Bilbao', c: [43.24, -2.95], km: 19.4, p: [2.05] },
+  { r: 'AP-8', n: 'Bilbao-Behobia', c: [43.25, -2.25], km: 105.6, p: [16.96] },
+  { r: 'AP-7', n: 'Cartagena-Vera', c: [37.45, -1.45], km: 99.04, p: [11.35, 10.15], k: 'seitt' },
+  { r: 'AP-7', n: 'Alicante-Cartagena', c: [37.95, -0.8], km: 76.6, p: [10.2, 5.7], k: 'temp' },
+  { r: 'AP-7', n: 'Málaga-Estepona', c: [36.55, -4.8], km: 82.66, p: [15.5, 9.55], k: 'temp' },
+  { r: 'AP-7', n: 'Estepona-Guadiaro', c: [36.36, -5.25], km: 22.48, p: [4.05, 2.45], k: 'temp' },
+  { r: 'R-2', n: 'Madrid-Guadalajara', c: [40.55, -3.35], km: 55.1, p: [6.4, 5.7], k: 'seitt' },
+  { r: 'R-3', n: 'Madrid-Arganda', c: [40.35, -3.5], km: 29.3, p: [3.4, 3.05], k: 'seitt' },
+  { r: 'R-4', n: 'Madrid-Ocaña', c: [40.1, -3.6], km: 54.1, p: [6.25, 5.55], k: 'seitt' },
+  { r: 'R-5', n: 'Madrid-Navalcarnero', c: [40.3, -3.9], km: 31.5, p: [3.65, 3.25], k: 'seitt' },
+  { r: 'M-12', n: 'Aeropuerto de Barajas', c: [40.5, -3.6], km: 8.4, p: [1.55, 1.4], k: 'seitt' },
+  { r: 'AP-36', n: 'Ocaña-La Roda', c: [39.6, -2.8], km: 123.2, p: [14.15, 12.6], k: 'seitt' },
+  { r: 'AP-41', n: 'Madrid-Toledo', c: [40.1, -3.95], km: 51.8, p: [5.95, 5.3], k: 'seitt' },
+  { r: 'AP-9', n: 'Ferrol-Tui', c: [42.8, -8.55], km: 219.6, p: [28.1] },
+  { r: 'AP-15', n: 'Tudela-Irurzun', c: [42.5, -1.7], km: 112.6, p: [14.05] },
+  { r: 'AP-53', n: 'Santiago-Alto de Santo Domingo', c: [42.75, -8.2], km: 56.6, p: [7.25] },
+  { r: 'AP-51', n: 'Ávila-Villacastín', c: [40.68, -4.5], km: 23.1, p: [2.95, 1.75, 1.1], k: 'hora' },
+  { r: 'AP-61', n: 'Segovia-San Rafael', c: [40.85, -4.15], km: 27.68, p: [4.95, 3.05, 2.0], k: 'hora' },
+  { r: 'AP-68', n: 'Bilbao-Zaragoza', c: [42.5, -2.3], km: 294.42, p: [39.9], until: '2026-11-10' },
+  { r: 'AP-71', n: 'León-Astorga', c: [42.55, -5.85], km: 37.7, p: [6.2, 2.5], k: 'noche' },
+  { r: 'AP-66', n: 'León-Campomanes', c: [42.95, -5.75], km: 77.76, p: [16.2] },
+  { r: 'AP-1', n: 'Vitoria-Eibar', c: [43.0, -2.55], km: 46.13, p: [10.04] },
+  { r: 'AP-6', n: 'Villalba-Adanero', c: [40.75, -4.15], km: 69.6, p: [15.7] },
+  { r: 'AP-46', n: 'Alto de las Pedrizas-Málaga', c: [36.8, -4.4], km: 28.04, p: [6.6, 4.35], k: 'temp' },
+  { r: 'C-32', n: 'Castelldefels-El Vendrell', c: [41.25, 1.7], km: 56.3, p: [13.45] },
+  { r: 'C-16', n: 'Sant Cugat-Manresa', c: [41.6, 1.95], km: 43.1, p: [12.95, 7.24], k: 'viat' },
+  { r: 'C-16', n: 'Túnel de Vallvidrera', c: [41.43, 2.1], km: 16.7, p: [5.28, 4.7] },
+  { r: 'C-16', n: 'Túnel del Cadí', c: [42.28, 1.75], km: 29.7, p: [14.56] },
+  { r: '', n: 'Túneles de Artxanda', c: [43.28, -2.93], km: 3.0, p: [1.55] },
+];
+const TOLL_AVG = 0.12; // €/km para un tramo de peaje que no está en la tabla
+/* Peaje estimado de una ruta, con la hora a la que pasas por cada tramo. */
+function tollCost(route, depart, tag) {
+  const out = { eur: 0, parts: [], notes: new Set(), guess: false };
+  if (!route || !route.tollSteps || !route.tollSteps.length) return out;
+  const by = new Map();
+  for (const st of route.tollSteps) {
+    let best = null, bd = Infinity;
+    for (const e of TOLLS) {
+      if (e.r ? !st.refs.includes(e.r) : st.refs.length) continue;
+      const d = hav(st.lat, st.lon, e.c[0], e.c[1]);
+      if (d < bd && d <= e.km / 2 + 25) { bd = d; best = e; }
+    }
+    const t = new Date(depart.getTime() + (st.atKm / route.distKm) * route.durMin * 60000);
+    const key = best ? best.n : 'otros';
+    let g = by.get(key);
+    if (!g) by.set(key, (g = { e: best, ref: best ? best.r : st.refs[0] || '', km: 0, eur: 0, free: '' }));
+    g.km += st.km;
+    if (!best) { g.eur += st.km * TOLL_AVG; out.guess = true; continue; }
+    const e = best, h = t.getHours(), m = t.getMonth() + 1, wd = t.getDay() >= 1 && t.getDay() <= 5;
+    let total = e.p[0];
+    if (e.until && t >= new Date(e.until + 'T00:00:00')) { total = 0; g.free = 'gratis desde que terminó la concesión'; }
+    else if (e.k === 'seitt') { if (h < 6) { total = 0; g.free = 'gratis de 0 a 6 h'; } else { total = tag ? e.p[1] : e.p[0]; if (!tag) out.notes.add('tag'); } }
+    else if (e.k === 'noche') { total = h >= 23 || h < 7 ? e.p[1] : e.p[0]; if (total === e.p[0]) out.notes.add('noche'); }
+    else if (e.k === 'hora') { total = e.p[1]; out.notes.add('hora'); }
+    else if (e.k === 'temp') { total = m >= 6 && m <= 9 ? e.p[0] : e.p[1]; out.notes.add(m >= 6 && m <= 9 ? 'alta' : 'baja'); }
+    else if (e.k === 'viat') { total = tag && wd ? e.p[1] : e.p[0]; if (!tag) out.notes.add('tag'); }
+    else if (e.n === 'Túnel de Vallvidrera') total = (e.p[0] + e.p[1]) / 2;
+    g.eur += st.km * total / e.km;
+    g.cap = total;
+  }
+  for (const g of by.values()) {
+    if (g.cap != null) g.eur = Math.min(g.eur, g.cap);
+    out.eur += g.eur;
+    out.parts.push(g);
+  }
+  return out;
+}
+const tollOf = (r) => tollCost(r, readDepart(), !!(document.getElementById('viat') && $('viat').checked));
+const roundEur = (x) => Math.round(x * 2) / 2;
+const eurR = (x) => { const r = roundEur(x); return (Number.isInteger(r) ? fmt(r, 0) : fmt(r, 2)) + ' €'; };
+function tollNotes(t) {
+  const n = [];
+  if (t.notes.has('tag')) n.push('con telepeaje (Vía-T) sale algo más barato');
+  if (t.notes.has('noche')) n.push('la AP-71 es más barata de 23 a 7 h');
+  if (t.notes.has('hora')) n.push('en hora punta puede costar más y en hora valle menos');
+  if (t.notes.has('alta')) n.push('estás en temporada alta, la más cara');
+  if (t.notes.has('baja')) n.push('en verano cuesta más');
+  for (const g of t.parts) if (g.free) n.push(`${g.ref || g.e.n}: ${g.free}`);
+  if (t.guess) n.push('algún tramo no está en mi tabla y lo he estimado a 0,12 €/km');
+  return n;
+}
+/* Precio medio del combustible elegido (para comparar rutas antes de buscar gasolinera) */
+let avgPriceC = null;
+function avgFuelPrice() {
+  const f = FUELS.find((x) => x.k === state.fuel) || FUELS[0];
+  if (avgPriceC && avgPriceC.k === f.k) return avgPriceC.v;
+  const v = state.stations ? median(state.stations.map((s) => s[f.i]).filter(Boolean)) : 1.5;
+  avgPriceC = { k: f.k, v: v || 1.5 };
+  return avgPriceC.v;
+}
+/* Comparación de una ruta con peaje frente a la mejor sin peaje de las que hay */
+function tollCompare(r, routes) {
+  const t = tollOf(r);
+  if (t.eur < 0.05) return '';
+  const free = routes.filter((x) => x !== r && tollOf(x).eur < 0.05).sort((a, b) => a.durMin - b.durMin)[0];
+  if (!free) return '';
+  const car = readCar(), price = avgFuelPrice();
+  const fuelDiff = (r.distKm - free.distKm) * car.cons / 100 * price;
+  const extra = t.eur + fuelDiff, mins = free.durMin - r.durMin;
+  if (mins < 1) return `Frente a ${esc(free.name || 'la ruta sin peaje')}: no ganas tiempo y pagas unos ${eurR((extra))} más.`;
+  const perH = extra / (mins / 60);
+  return `Frente a ${esc(free.name || 'la ruta sin peaje')}: llegas ${dur(mins)} antes y pagas unos ${eurR((Math.max(0, extra)))} más entre peaje y gasolina. ${extra <= 0 ? 'Te sale a cuenta.' : `Compensa si tu hora vale más de ${fmt(perH, 0)} €.`}`;
 }
 
 /* Mide el desvío real (km y minutos) de un grupo de candidatas con una consulta a OSRM. */
@@ -800,7 +919,7 @@ function save() {
       fuel: state.fuel, ...Object.fromEntries(FIELDS.map((k) => [k, $(k).value])),
       discounts: state.discounts, skin: document.documentElement.dataset.skin || '', theme: document.documentElement.dataset.theme || '',
       car: state.car, frac: state.frac, detour: state.detour, eat: state.eat, carDone: state.carDone,
-      avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, recents: state.recents,
+      avoidTolls: $('peajes').checked, noEarly: $('temprano').checked, viat: $('viat').checked, recents: state.recents,
       origin: state.origin && !state.origin.gps ? state.origin : null, dest: state.dest,
       stops: state.stops.filter((x) => x.place).map((x) => x.place),
     }));
@@ -818,7 +937,7 @@ function restore() {
     if (THRESHOLDS.some((t) => Math.abs(t.f - d.frac) < 0.01)) state.frac = d.frac;
     if (DETOURS.some((x) => x.k === d.detour)) state.detour = d.detour;
     state.carDone = !!d.carDone;
-    $('peajes').checked = !!d.avoidTolls; $('temprano').checked = !!d.noEarly;
+    $('peajes').checked = !!d.avoidTolls; $('temprano').checked = !!d.noEarly; $('viat').checked = !!d.viat;
     if (Array.isArray(d.recents)) state.recents = d.recents.slice(0, 5);
     if (d.origin) { state.origin = d.origin; $('origen').value = d.origin.name; }
     if (d.dest) { state.dest = d.dest; $('destino').value = d.dest.name; }
@@ -951,7 +1070,11 @@ const mins = (m) => (m < 0.5 ? 'menos de 1 min' : '+' + fmt(m, 0) + ' min');
 const hhmm = (d) => d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
 const dur = (m) => `${Math.floor(m / 60) ? Math.floor(m / 60) + ' h ' : ''}${Math.round(m % 60)} min`;
 const priceTxt = (c) => `${fmt(c.price, 3)} €/L${c.disc ? ` (con tu descuento de ${fmt(c.disc, 0)} cts)` : ''}`;
-const tollTxt = (r) => (r.tollKm >= 1 ? `Peaje: unos ${fmt(r.tollKm, 0)} km${r.tollRefs.length ? ' (' + r.tollRefs.join(', ') + ')' : ''}` : 'Sin peajes');
+const tollTxt = (r) => {
+  if (!(r.tollKm >= 1)) return 'Sin peajes';
+  const t = tollOf(r), refs = [...new Set(t.parts.map((g) => g.ref).filter(Boolean))].slice(0, 3).join(', ');
+  return t.eur >= 0.05 ? `Peaje: unos ${eurR((t.eur))}${refs ? ' (' + refs + ')' : ''}` : `Peaje gratis a esa hora${refs ? ' (' + refs + ')' : ''}`;
+};
 const isDark = () => {
   const skin = document.documentElement.dataset.skin;
   const th = document.documentElement.dataset.theme;
@@ -988,7 +1111,7 @@ function renderRoutes() {
   map.fitBounds(bounds, { padding: [24, 24] });
   state.rmap = map;
   $('alts').innerHTML = routes.map((r, i) => `<button type="button" role="radio" data-alt="${i}" aria-checked="${i === state.alt}">
-      <b>${esc(r.name || 'Ruta ' + (i + 1))}</b><small>${fmt(r.distKm, 0)} km · unas ${dur(r.durMin)}</small><small class="${r.tollKm >= 1 ? 'toll' : ''}">${tollTxt(r)}</small></button>`).join('');
+      <b>${esc(r.name || 'Ruta ' + (i + 1))}</b><small>${fmt(r.distKm, 0)} km · unas ${dur(r.durMin)}</small><small class="${r.tollKm >= 1 ? 'toll' : ''}">${tollTxt(r)}</small>${(() => { const c = tollCompare(r, routes); return c ? `<small class="cmpline">${c}</small>` : ''; })()}</button>`).join('');
 }
 
 /* ---------- Panel 4: resultado ---------- */
@@ -1357,6 +1480,12 @@ function renderResult() {
     else if (P.foodFailed) infos.push('No he podido consultar los restaurantes cercanos ahora mismo.');
     else infos.push(`No he encontrado una gasolinera con sitio para comer en el tramo de la hora de ${car.meal.n} que te compense; esta es la mejor para repostar.`);
   }
+  if (P.route.tollKm >= 1) {
+    const t = tollOf(P.route), n = tollNotes(t);
+    infos.push(`${t.eur >= 0.05 ? `Peaje estimado: unos ${eurR((t.eur))}` : 'Peaje: gratis a la hora a la que pasas'} (${t.parts.map((g) => `${esc(g.ref || g.e.n)} ${g.e ? esc(g.e.n) : ''}, ${fmt(g.km, 0)} km`).join('; ')}).${n.length ? ' ' + n.map((x) => x[0].toUpperCase() + x.slice(1)).join('. ') + '.' : ''} Tarifas de ${TOLLS_YEAR} para turismos; el importe exacto depende de dónde entres y salgas.`);
+    const c = tollCompare(P.route, state.routes);
+    if (c) infos.push(c);
+  }
   if (P.detourRelaxed) infos.push('Ninguna parada cumple tu límite de desvío, así que te propongo la mejor de las que hay.');
   if (P.closed) infos.push(`${P.closed} ${P.closed === 1 ? 'gasolinera descartada porque estará cerrada' : 'gasolineras descartadas porque estarán cerradas'} cuando pases.`);
   const route = P.route, stops = ch.stops;
@@ -1504,7 +1633,15 @@ async function stepRoute() {
     state.stopPlaces = state.stops.map((x) => x.place);
     $('origen').value = state.origin.name; $('destino').value = state.dest.name;
     renderStops(); save();
-    state.routes = await fetchRoute([state.origin, ...state.stopPlaces, state.dest], $('peajes').checked);
+    const pts = [state.origin, ...state.stopPlaces, state.dest];
+    state.routes = await fetchRoute(pts, $('peajes').checked);
+    // Si todas las rutas tienen peaje, se añade la mejor sin peaje para poder comparar
+    if (state.routes.every((r) => r.tollKm >= 1)) {
+      try {
+        const free = (await fetchRoute(pts, true)).find((r) => r.tollKm < 1);
+        if (free) { free.name = (free.name || 'Sin peajes') + ' · sin peajes'; state.routes.push(free); }
+      } catch (_) { /* sin alternativa: se enseña solo el precio */ }
+    }
     state.alt = 0; state.plan = null; state.maxPanel = 1;
     busy(false); go(1);
   } catch (e) { busy(false); fail(e); }
@@ -1592,6 +1729,7 @@ function init() {
   $('btn-now').addEventListener('click', () => { $('salida').value = ''; $('when-box').hidden = true; updateWhen(); });
   $('peajes').addEventListener('change', save);
   $('temprano').addEventListener('change', save);
+  $('viat').addEventListener('change', () => { save(); if (state.routes && state.panel === 1) renderRoutes(); });
 
   const auto = () => setTimeout(() => { if (state.panel === 2 && state.q < QS.length - 1) showQ(state.q + 1, 1); }, 260);
   $('fuels').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) { state.fuel = b.dataset.k; updateGauge(); save(); auto(); } });

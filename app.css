@@ -600,3 +600,10 @@ html:not([data-skin]) .sugg li:hover { background: var(--fill); }
 @keyframes fadeIn { from { opacity: 0; } }
 body.locked { overflow: hidden; }
 .gbox .rows-set .unit { border-bottom: 0; width: 110px; } .gbox .rows-set .unit input { font-size: 19px; }
+
+.alts small.cmpline { color: var(--muted); font-size: 13px; margin-top: 4px; line-height: 1.35; }
+/* Interruptor tipo iOS */
+.switch input { appearance: none; -webkit-appearance: none; width: 51px; height: 31px; border-radius: 16px; background: var(--fill, var(--line)); position: relative; flex: none; cursor: pointer; transition: background .2s; margin: 0; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,.2); transition: transform .2s; }
+.switch input:checked { background: #34C759; }
+.switch input:checked::after { transform: translateX(20px); }
