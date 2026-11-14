@@ -1688,30 +1688,97 @@ function badge(c) {
 }
 /* Depósito dibujado: azul lo que traes, verde lo que echas, raya roja tu límite. */
 let tankSeq = 0;
+const tankWave = (ya, ys, A, ph, bump = 0, bx = 82) => {
+  // Combustible nuevo: de la línea del azul (ya) hasta la superficie (ys), que ondula; «bump» es el hueco donde cae el chorro
+  let d = `M0 ${ya.toFixed(1)}`;
+  for (let x = 0; x <= 120; x += 4) {
+    const g = bump ? bump * Math.exp(-((x - bx) ** 2) / 90) : 0;
+    d += `L${x} ${Math.min(ya, ys + A * Math.sin(x / 120 * Math.PI * 3 + ph) + g).toFixed(2)}`;
+  }
+  return d + `L120 ${ya.toFixed(1)}Z`;
+};
 function tankSVG(lg, car) {
   const id = 'tk' + (++tankSeq), X = 14, W = 92, top = 24, H = 136, y = (l) => top + H - (l / car.tank) * H;
   const ya = y(lg.arrive), yf = y(Math.min(car.tank, lg.arrive + lg.L)), yr = y(car.reserve);
   const ticks = [0.25, 0.5, 0.75].map((f) => `<line x1="${X + W - 14}" x2="${X + W - 6}" y1="${(top + H - f * H).toFixed(1)}" y2="${(top + H - f * H).toFixed(1)}" stroke="#fff" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"/>`).join('');
-  return `<svg class="tankA" viewBox="0 0 120 168" role="img" aria-label="Depósito: llegas con ${fmt(lg.arrive, 0)} litros y echas ${fmt(lg.L, 0)}">
+  const big = ya - yf > 24;
+  return `<svg class="tankA" viewBox="0 0 120 168" role="img" aria-label="Depósito: llegas con ${fmt(lg.arrive, 0)} litros y echas ${fmt(lg.L, 0)}" data-ya="${ya.toFixed(1)}" data-yf="${yf.toFixed(1)}" data-l="${Math.round(lg.L)}">
     <defs><clipPath id="${id}"><rect x="${X}" y="${top}" width="${W}" height="${H}" rx="24"/></clipPath>
       <linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4DA3FF"/><stop offset="1" stop-color="#0A66D6"/></linearGradient>
-      <linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5FDB7C"/><stop offset="1" stop-color="#24A148"/></linearGradient>
-      <pattern id="${id}s" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="12" fill="#fff" opacity=".18"/></pattern></defs>
-    <rect x="70" y="6" width="24" height="12" rx="5" fill="var(--muted)" opacity=".55"/><rect x="76" y="16" width="12" height="10" fill="var(--muted)" opacity=".45"/>
+      <linearGradient id="${id}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7BEA93"/><stop offset="1" stop-color="#24A148"/></linearGradient>
+      <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3CC562"/><stop offset=".5" stop-color="#A6F5B8"/><stop offset="1" stop-color="#3CC562"/></linearGradient></defs>
+    <g class="tk-cap"><rect x="70" y="6" width="24" height="12" rx="5" fill="var(--muted)" opacity=".55"/></g><rect x="76" y="16" width="12" height="10" fill="var(--muted)" opacity=".45"/>
     <rect x="${X}" y="${top}" width="${W}" height="${H}" rx="24" fill="var(--fill, var(--bg))"/>
     <g clip-path="url(#${id})">
-      <rect class="lq have" x="0" y="${ya.toFixed(1)}" width="120" height="${(top + H - ya).toFixed(1)}" fill="url(#${id}b)"/>
-      <rect class="lq add" x="0" y="${yf.toFixed(1)}" width="120" height="${(ya - yf).toFixed(1)}" fill="url(#${id}g)"/>
-      <rect class="lq add" x="0" y="${yf.toFixed(1)}" width="120" height="${(ya - yf).toFixed(1)}" fill="url(#${id}s)"/>
-      <path class="wave" data-y="${yf.toFixed(1)}" d="M0 ${yf.toFixed(1)} q15 -5 30 0 t30 0 t30 0 t30 0 v6 h-120z" fill="#5FDB7C" opacity=".7"/>
+      <rect class="tk-have" x="0" y="${ya.toFixed(1)}" width="120" height="${(top + H - ya).toFixed(1)}" fill="url(#${id}b)"/>
+      <path class="tk-new" d="${tankWave(ya, yf, 1.2, 0)}" fill="url(#${id}g)"/>
+      <g class="tk-bub" fill="#fff"></g>
+      <rect class="tk-stream" x="79" y="22" width="6" height="0" rx="3" fill="url(#${id}s)"/>
       <rect x="${X + 8}" y="${top + 6}" width="10" height="${H - 12}" rx="5" fill="#fff" opacity=".18"/>
       ${ticks}
     </g>
     <line x1="${X}" x2="${X + W}" y1="${yr.toFixed(1)}" y2="${yr.toFixed(1)}" stroke="#FF453A" stroke-width="2.5" stroke-dasharray="5 4"/>
     <rect x="${X}" y="${top}" width="${W}" height="${H}" rx="24" fill="none" stroke="var(--line)" stroke-width="3"/>
     <text x="${X + W / 2}" y="${Math.min(top + H - 10, ya + 24).toFixed(1)}" text-anchor="middle" class="tk-t">${fmt(lg.arrive, 0)} L</text>
-    ${ya - yf > 24 ? `<text x="${X + W / 2}" y="${((ya + yf) / 2 + 7).toFixed(1)}" text-anchor="middle" class="tk-t">+${fmt(lg.L, 0)}</text>` : ''}
+    <text class="tk-t tk-add" x="${X + W / 2}" y="${((ya + yf) / 2 + 7).toFixed(1)}" text-anchor="middle"${big ? '' : ' visibility="hidden"'}>+${fmt(lg.L, 0)}</text>
   </svg>`;
+}
+// Repostaje: se abre el tapón, cae el chorro, el nivel sube desde el azul con la superficie viva y burbujas, y al cerrar se calma
+function fillTank(svg) {
+  if (!svg || !svg.isConnected || svg.dataset.anim === '1') return;
+  const ya = +svg.dataset.ya, yf = +svg.dataset.yf, L = +svg.dataset.l;
+  const nw = svg.querySelector('.tk-new'), st = svg.querySelector('.tk-stream'), cap = svg.querySelector('.tk-cap'), bub = svg.querySelector('.tk-bub'), lab = svg.querySelector('.tk-add');
+  if (!nw || calmFx()) return;
+  svg.dataset.anim = '1';
+  const T_OPEN = 0.25, T_POUR = 0.55, T_FILL = 1.7, T_STOP = T_POUR + T_FILL, T_END = T_STOP + 1.8;
+  const ease = (k) => k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  const bubbles = [];
+  let t0 = null, lastB = 0;
+  lab.setAttribute('visibility', 'hidden');
+  nw.setAttribute('d', tankWave(ya, ya, 0, 0));
+  const frame = (now) => {
+    if (!svg.isConnected) return;
+    if (t0 === null) t0 = now;
+    const t = (now - t0) / 1000;
+    // Tapón: se levanta y vuelve a su sitio
+    const capUp = t < T_OPEN ? t / T_OPEN : t < T_STOP ? 1 : Math.max(0, 1 - (t - T_STOP) / 0.25);
+    cap.setAttribute('transform', `translate(${(4 * capUp).toFixed(2)} ${(-7 * capUp).toFixed(2)}) rotate(${(-18 * capUp).toFixed(1)} 94 12)`);
+    // Nivel
+    const k = Math.min(1, Math.max(0, (t - T_POUR) / T_FILL)), ys = ya + (yf - ya) * ease(k);
+    // Chorro: baja hasta la superficie mientras se reposta y se corta al final
+    let sTop = 22, sBot = 22;
+    if (t >= T_OPEN && t < T_STOP + 0.25) {
+      sBot = t < T_POUR ? 22 + (ys - 22) * Math.min(1, (t - T_OPEN) / (T_POUR - T_OPEN)) : ys;
+      if (t > T_STOP) sTop = 22 + (ys - 22) * Math.min(1, (t - T_STOP) / 0.25);
+    }
+    st.setAttribute('y', sTop.toFixed(1)); st.setAttribute('height', Math.max(0, sBot - sTop).toFixed(1));
+    st.setAttribute('opacity', sBot - sTop > 1 ? '1' : '0');
+    // Superficie: agitada mientras cae el chorro, se calma con un vaivén amortiguado
+    const pouring = t >= T_POUR && t < T_STOP;
+    const after = Math.max(0, t - T_STOP);
+    const A = pouring ? 2.2 + Math.sin(t * 9) * 0.8 : t >= T_STOP ? 3 * Math.exp(-2.2 * after) * Math.cos(6 * after) : 0;
+    const bump = pouring ? 3.5 : t >= T_STOP ? 3.5 * Math.exp(-6 * after) : 0;
+    nw.setAttribute('d', tankWave(ya, ys, A, t * 7, bump));
+    // Burbujas que suben y se deshacen
+    if (pouring && ya - ys > 8 && now - lastB > 70) {
+      lastB = now;
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('r', (0.9 + Math.random() * 1.8).toFixed(1)); bub.appendChild(c);
+      bubbles.push({ c, x: 64 + Math.random() * 34, y: Math.min(ya - 2, ys + 8 + Math.random() * (ya - ys)), v: 14 + Math.random() * 18, born: now });
+    }
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i], age = (now - b.born) / 1000;
+      b.y -= b.v / 60; b.x += Math.sin(age * 8 + i) * 0.25;
+      const surf = ys + 1;
+      if (b.y <= surf || age > 1.4) { b.c.remove(); bubbles.splice(i, 1); continue; }
+      b.c.setAttribute('cx', b.x.toFixed(1)); b.c.setAttribute('cy', b.y.toFixed(1)); b.c.setAttribute('opacity', (0.55 * (1 - age / 1.4)).toFixed(2));
+    }
+    // Litros que van entrando
+    if (ya - ys > 24) { lab.setAttribute('visibility', 'visible'); lab.setAttribute('y', ((ya + ys) / 2 + 7).toFixed(1)); lab.textContent = '+' + fmt(L * ease(k), 0); }
+    if (t < T_END || bubbles.length) requestAnimationFrame(frame);
+    else { nw.setAttribute('d', tankWave(ya, yf, 0, 0)); cap.removeAttribute('transform'); if (ya - yf > 24) lab.textContent = '+' + fmt(L, 0); }
+  };
+  setTimeout(() => requestAnimationFrame(frame), 350);
 }
 
 /* Lo mismo en otros sitios: cuánto costarían esos mismos litros en las alternativas y a precio normal. */
@@ -1942,23 +2009,11 @@ function morphDone(box) {
     requestAnimationFrame(tick);
   }).catch(finish);
 }
-// La superficie del combustible: entra agitada y se va calmando, como un líquido de verdad
-function settleWave(svg) {
-  const w = svg && svg.querySelector('.wave');
-  if (!w || calmFx()) return;
-  const y = +w.dataset.y, t0 = performance.now() + 450;
-  const tick = (now) => {
-    const t = Math.max(0, (now - t0) / 1000), A = 7 * Math.exp(-1.6 * t) * Math.cos(5.5 * t) + 2.2 * (1 - Math.exp(-2 * t));
-    w.setAttribute('d', `M0 ${y.toFixed(1)} q15 ${(-A).toFixed(2)} 30 0 t30 0 t30 0 t30 0 v8 h-120z`);
-    if (t < 2.6 && svg.isConnected) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
 function slideFx(sl) {
   if (!sl) return;
   sl.querySelectorAll('.count').forEach((el) => countUp(el, 150, true));
   sl.querySelectorAll('.st-save b[data-to]').forEach((el) => countUp(el, 1650, true));
-  sl.querySelectorAll('.tankA').forEach(settleWave);
+  sl.querySelectorAll('.tankA').forEach((t) => { delete t.dataset.anim; fillTank(t); });
   morphDone(sl.querySelector('.done-ic'));
 }
 

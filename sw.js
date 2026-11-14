@@ -3,8 +3,8 @@
    - Librerías de los CDN: se guardan la primera vez y se sirven desde el móvil.
    - Mapas (OpenFreeMap): se sirven al instante desde lo guardado y se refrescan por detrás.
    - Precios: red primero; sin red, los últimos descargados. */
-const V = 'r95-v46';
-const SHELL = ['./', 'index.html', 'app.css?v=46', 'app.js?v=46', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'vendor/flubber.min.js'];
+const V = 'r95-v47';
+const SHELL = ['./', 'index.html', 'app.css?v=47', 'app.js?v=47', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'vendor/flubber.min.js'];
 const LIBS = 'r95-libs', TILES = 'r95-tiles', DATA = 'r95-data';
 const MAX_TILES = 600;
 

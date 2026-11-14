@@ -449,10 +449,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .goA { display: flex; align-items: center; justify-content: center; min-height: 56px; border-radius: 28px; background: var(--cta-bg); color: var(--cta-ink); font-weight: 700; font-size: 17px; text-decoration: none; }
 .planA .breakdown { padding: 0; }
 @media (prefers-reduced-motion: no-preference) {
-  .tankA .lq { transform-box: fill-box; transform-origin: bottom; }
-  .tankA .have { animation: fillup .7s .25s cubic-bezier(.2, .7, .2, 1) both; }
-  .tankA .add, .tankA .wave { animation: fillup .8s 1s cubic-bezier(.2, .7, .2, 1) both; transform-box: fill-box; transform-origin: bottom; }
-  .tankA .wave { animation: fillup .8s 1s cubic-bezier(.2, .7, .2, 1) both, slosh 2.4s 1.8s ease-in-out infinite alternate; }
   .stopA, .hero { animation: rise .4s .05s cubic-bezier(.2, .7, .2, 1) both; }
 }
 @keyframes fillup { from { transform: scaleY(0); } }
@@ -745,7 +741,6 @@ a.sl-where { color: inherit; text-decoration: none; }
 .st-nexthint b { color: var(--blue); }
 @media (prefers-reduced-motion: no-preference) {
   .slide.on .sr { animation: rise .5s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0s); }
-  .slide.on .st-story .tankA .lq.add, .slide.on .st-story .tankA .wave { animation-delay: .45s; }
 }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
 /* Final y opcional */
