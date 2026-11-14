@@ -794,3 +794,4 @@ a.sl-where { color: inherit; text-decoration: none; }
 .switch.maxsave span { display: flex; flex-direction: column; gap: 3px; }
 .switch.maxsave b { font: 600 17px var(--f-body); }
 .switch.maxsave small { font-size: 13px; color: var(--muted); line-height: 1.35; }
+a.st-go { text-decoration: none; }

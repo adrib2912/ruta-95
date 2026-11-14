@@ -1813,7 +1813,7 @@ function renderResult() {
             ${row(2, 'En una normal', eur(lg.L * P.ref), 'muted')}
           </div></div>
         ${save > 0.005 ? `<div class="st-save sr" style="--d:1.6s"><span>Te ahorras</span><b>${eur(save)}</b></div>` : ''}</section>
-        ${last ? `<button type="button" class="st-go sr" style="--d:2.1s" data-next><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg><span><b>¡Vamos! Ver mi ruta</b><small>La abres en Google Maps con la parada ya puesta</small></span><i aria-hidden="true">›</i></button>` : `<button type="button" class="st-go sr" style="--d:2.1s" data-next><span><b>Ver la siguiente parada</b></span><i aria-hidden="true">›</i></button>`}
+        ${last ? `<a class="st-go sr" style="--d:2.1s" href="${gmaps(ch.stops)}" target="_blank" rel="noopener" data-gomaps><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg><span><b>¡Vamos! Abrir en Google Maps</b><small>La ruta con la parada ya puesta</small></span><i aria-hidden="true">›</i></a>` : `<button type="button" class="st-go sr" style="--d:2.1s" data-next><span><b>Ver la siguiente parada</b></span><i aria-hidden="true">›</i></button>`}
         <div class="small-print"><p>${why}${c.detourMin >= 0.5 ? ` Desvío: ${approx(c)}${mins(c.detourMin)}.` : ''}</p><p>${esc(nice(c.s[4]))}${c.s[8] ? ' · Horario ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (sin confirmar)' : ''}</p>${food}</div></div>`;
     }),
     `<div class="sl-end card"><h2>Listo para salir</h2>
@@ -1869,13 +1869,13 @@ function paintStoryBar() {
   $('btn-back').innerHTML = inStory && i > 0 ? ARROW_L + 'Anterior' : ARROW_L + 'Coche';
   let label = 'Nueva búsqueda';
   if (inStory) {
-    if (i === 0) label = 'Ver dónde parar' + ARROW_R;
+    if (i === 0) label = 'Ver cuánto pagas' + ARROW_R;
     else if (i < end - 1) label = 'Siguiente parada' + ARROW_R;
-    else if (i === end - 1) label = '¡Vamos!' + ARROW_R;
+    else if (i === end - 1) label = 'Listo para salir' + ARROW_R;
     else if (i === end) label = 'Comparar precios' + ARROW_R;
   }
   $('btn-next').innerHTML = label;
-  $('btn-next').classList.toggle('nudge', inStory && (i === 0 || i === end - 1));
+  $('btn-next').classList.toggle('nudge', inStory && i === 0);
   $('btn-next').classList.toggle('quiet', !inStory || i >= end);
 }
 function closeStory() {
@@ -2235,6 +2235,7 @@ function init() {
     const dot = e.target.closest('[data-dot]');
     if (dot) showSlide(+dot.dataset.dot);
     else if (e.target.closest('[data-next]')) showSlide(story.i + 1);
+    else if (e.target.closest('[data-gomaps]')) setTimeout(() => showSlide(story.n - 2), 400);   // al volver de Google Maps, «Listo para salir»
     else if (e.target.closest('[data-seeall]')) closeStory();
     else if (e.target.closest('#btn-replay')) playTour();
   });
