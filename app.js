@@ -1703,7 +1703,7 @@ function tankSVG(lg, car) {
       <rect class="lq have" x="0" y="${ya.toFixed(1)}" width="120" height="${(top + H - ya).toFixed(1)}" fill="url(#${id}b)"/>
       <rect class="lq add" x="0" y="${yf.toFixed(1)}" width="120" height="${(ya - yf).toFixed(1)}" fill="url(#${id}g)"/>
       <rect class="lq add" x="0" y="${yf.toFixed(1)}" width="120" height="${(ya - yf).toFixed(1)}" fill="url(#${id}s)"/>
-      <path class="wave" d="M0 ${yf.toFixed(1)} q15 -5 30 0 t30 0 t30 0 t30 0 v6 h-120z" fill="#5FDB7C" opacity=".7"/>
+      <path class="wave" data-y="${yf.toFixed(1)}" d="M0 ${yf.toFixed(1)} q15 -5 30 0 t30 0 t30 0 t30 0 v6 h-120z" fill="#5FDB7C" opacity=".7"/>
       <rect x="${X + 8}" y="${top + 6}" width="10" height="${H - 12}" rx="5" fill="#fff" opacity=".18"/>
       ${ticks}
     </g>
@@ -1846,11 +1846,11 @@ function renderResult() {
             ${row(1, 'Pagas', eur(lg.pay))}
             ${row(2, 'En una normal', eur(lg.L * P.ref), 'muted')}
           </div></div>
-        ${save > 0.005 ? `<div class="st-save sr" style="--d:1.6s"><span>Te ahorras</span><b>${eur(save)}</b></div>` : ''}</section>
+        ${save > 0.005 ? `<div class="st-save sr" style="--d:1.6s"><span>Te ahorras</span><b data-to="${save.toFixed(2)}">${eur(save)}</b></div>` : ''}</section>
         ${last ? `<a class="st-go sr" style="--d:2.1s" href="${gmaps(ch.stops)}" target="_blank" rel="noopener" data-gomaps><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg><span><b>¡Vamos! Abrir en Google Maps</b><small>La ruta con la parada ya puesta</small></span><i aria-hidden="true">›</i></a>` : `<button type="button" class="st-go sr" style="--d:2.1s" data-next><span><b>Ver la siguiente parada</b></span><i aria-hidden="true">›</i></button>`}
         <div class="small-print"><p>${why}${c.detourMin >= 0.5 ? ` Desvío: ${approx(c)}${mins(c.detourMin)}.` : ''}</p><p>${esc(nice(c.s[4]))}${c.s[8] ? ' · Horario ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (sin confirmar)' : ''}</p>${food}</div></div>`;
     }),
-    `<div class="sl-end card"><h2>Listo para salir</h2>
+    `<div class="sl-end card"><div class="done-ic" aria-hidden="true"><svg viewBox="0 0 48 48"><path class="mph" d="${PUMP_D}"/><rect class="mph-win" x="17.5" y="13" width="10" height="8" rx="1.6"/></svg></div><h2>Listo para salir</h2>
       <p>Para en <b>${esc(stops.map(stName).join(' y '))}</b> (${stops.map((c) => 'km ' + fmt(c.km, 0)).join(' y ')}) hacia las <b>${stops.map((c) => hhmm(c.eta)).join(' y ')}</b> y llegarás a ${esc(state.dest.name)} con unos <b>${fmt(ch.endFuel, 0)} L</b>.</p>
       <a class="goBig" href="${gmaps(ch.stops)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c-3.9 0-7 3-7 6.9 0 5 7 12.1 7 12.1s7-7.1 7-12.1c0-3.9-3.1-6.9-7-6.9z" fill="currentColor"/><circle cx="12" cy="9.4" r="2.6" fill="var(--cta-bg)"/></svg><span>Abrir en Google Maps<small>La ruta hasta ${esc(state.dest.name)} con la parada ya puesta</small></span></a>
       ${stops.map((c) => `<a class="seeSt" href="${placeUrl(c)}" target="_blank" rel="noopener">${badge(c)}<span><b>Ver ${esc(stName(c))} en el mapa</b><small>${esc(nice(c.s[4]))}, ${esc(stTown(c))}</small></span><i aria-hidden="true">›</i></a>`).join('')}
@@ -1861,13 +1861,105 @@ function renderResult() {
   ];
   openStory(slides);
   requestAnimationFrame(() => playTour());
-  // El ahorro se cuenta hacia arriba al aparecer
-  document.querySelectorAll('.count').forEach((el) => {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const to = +el.dataset.to, t0 = performance.now();
-    const tick = (now) => { const k = Math.min(1, Math.max(0, (now - t0) / 800)), e = 1 - Math.pow(1 - k, 3); el.textContent = eur(to * e); if (k < 1) requestAnimationFrame(tick); };
+}
+
+
+/* ---------- Efectos: contador, brillos y transformación de formas ---------- */
+const calmFx = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Cifra que sube de 0 a su valor (frena al final) y, si es ahorro, explota en brillos
+function countUp(el, delay = 0, withBurst = false) {
+  const to = +el.dataset.to;
+  if (!isFinite(to)) return;
+  if (calmFx()) { el.textContent = eur(to); return; }
+  el.textContent = eur(0);
+  const dur = 900 + Math.min(600, to * 40);
+  setTimeout(() => {
+    const t0 = performance.now();
+    const tick = (now) => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 4);
+      el.textContent = eur(to * e);
+      if (k < 1) return requestAnimationFrame(tick);
+      if (withBurst && to >= 0.5) burst(el);
+      el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 520, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+    };
     requestAnimationFrame(tick);
-  });
+  }, delay);
+}
+// Explosión de brillos (a lo mo.js): un aro que se abre y chispas que salen disparadas
+const SPARK = '<svg viewBox="0 0 20 20"><path d="M10 0c1 5.5 4.5 9 10 10-5.5 1-9 4.5-10 10-1-5.5-4.5-9-10-10 5.5-1 9-4.5 10-10z" fill="currentColor"/></svg>';
+function burst(el) {
+  if (calmFx() || !el.isConnected) return;
+  const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const layer = document.createElement('div');
+  layer.className = 'burst'; layer.style.left = cx + 'px'; layer.style.top = cy + 'px';
+  document.body.appendChild(layer);
+  const ring = document.createElement('i'); ring.className = 'b-ring'; layer.appendChild(ring);
+  ring.animate([{ transform: 'translate(-50%,-50%) scale(.2)', opacity: .9, borderWidth: '10px' }, { transform: 'translate(-50%,-50%) scale(1.6)', opacity: 0, borderWidth: '1px' }], { duration: 650, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' });
+  const cols = ['var(--good)', '#FFD60A', '#5FDB7C', '#FFFFFF'];
+  const N = 16;
+  for (let i = 0; i < N; i++) {
+    const p = document.createElement('i'), star = i % 3 === 0;
+    p.className = star ? 'b-star' : 'b-dot';
+    if (star) p.innerHTML = SPARK;
+    p.style.color = cols[i % cols.length];
+    layer.appendChild(p);
+    const a = (i / N) * Math.PI * 2 + Math.random() * 0.4, d = Math.max(r.width / 2, 40) + 30 + Math.random() * 46;
+    const x = Math.cos(a) * d, y = Math.sin(a) * d * 0.75, s = star ? 0.9 + Math.random() * 0.6 : 0.6 + Math.random() * 0.6;
+    p.animate([
+      { transform: 'translate(-50%,-50%) translate(0,0) scale(0) rotate(0deg)', opacity: 1 },
+      { transform: `translate(-50%,-50%) translate(${x * 0.7}px,${y * 0.7}px) scale(${s}) rotate(${star ? 90 : 0}deg)`, opacity: 1, offset: 0.55 },
+      { transform: `translate(-50%,-50%) translate(${x}px,${y + 14}px) scale(0) rotate(${star ? 180 : 0}deg)`, opacity: 0 },
+    ], { duration: 760 + Math.random() * 260, easing: 'cubic-bezier(.15,.8,.3,1)', fill: 'forwards' });
+  }
+  setTimeout(() => layer.remove(), 1200);
+}
+// El surtidor que se convierte en ✓ (Flubber, cargado solo cuando hace falta)
+const PUMP_D = 'M14 41V12.5A3.5 3.5 0 0 1 17.5 9h10a3.5 3.5 0 0 1 3.5 3.5V22h1.5a3 3 0 0 1 3 3v8.5a1.6 1.6 0 0 0 3.2 0V19.5l-4.4-4.4 2.1-2.1 5.3 5.3v15.2a4.8 4.8 0 0 1-9.6 0V25.6H31V41z';
+const CHECK_D = 'M9.5 25.5l4.6-4.6 6.9 6.9 13.4-13.4 4.6 4.6-18 18z';
+let flubberP = null;
+const loadFlubber = () => flubberP || (flubberP = new Promise((ok, ko) => {
+  if (window.flubber) return ok(window.flubber);
+  const s = document.createElement('script'); s.src = 'vendor/flubber.min.js'; s.onload = () => ok(window.flubber); s.onerror = ko; document.head.appendChild(s);
+}));
+function morphDone(box) {
+  const path = box && box.querySelector('.mph');
+  if (!path || box.dataset.done) return;
+  box.dataset.done = '1';
+  const finish = () => { path.setAttribute('d', CHECK_D); box.classList.add('ok'); };
+  if (calmFx()) return finish();
+  loadFlubber().then((fl) => {
+    const f = fl.interpolate(PUMP_D, CHECK_D, { maxSegmentLength: 1.5 });
+    box.classList.add('ok');
+    const t0 = performance.now() + 250, D = 650;
+    const tick = (now) => {
+      const k = Math.min(1, Math.max(0, (now - t0) / D)), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+      path.setAttribute('d', f(e));
+      if (k < 1) return requestAnimationFrame(tick);
+      path.setAttribute('d', CHECK_D);
+      box.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.14)' }, { transform: 'scale(1)' }], { duration: 560, easing: 'cubic-bezier(.3,1.6,.5,1)' });
+      burst(box);
+    };
+    requestAnimationFrame(tick);
+  }).catch(finish);
+}
+// La superficie del combustible: entra agitada y se va calmando, como un líquido de verdad
+function settleWave(svg) {
+  const w = svg && svg.querySelector('.wave');
+  if (!w || calmFx()) return;
+  const y = +w.dataset.y, t0 = performance.now() + 450;
+  const tick = (now) => {
+    const t = Math.max(0, (now - t0) / 1000), A = 7 * Math.exp(-1.6 * t) * Math.cos(5.5 * t) + 2.2 * (1 - Math.exp(-2 * t));
+    w.setAttribute('d', `M0 ${y.toFixed(1)} q15 ${(-A).toFixed(2)} 30 0 t30 0 t30 0 t30 0 v8 h-120z`);
+    if (t < 2.6 && svg.isConnected) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+function slideFx(sl) {
+  if (!sl) return;
+  sl.querySelectorAll('.count').forEach((el) => countUp(el, 150, true));
+  sl.querySelectorAll('.st-save b[data-to]').forEach((el) => countUp(el, 1650, true));
+  sl.querySelectorAll('.tankA').forEach(settleWave);
+  morphDone(sl.querySelector('.done-ic'));
 }
 
 /* ---------- Resumen por pantallas ---------- */
@@ -1888,6 +1980,7 @@ function showSlide(i) {
   el.querySelectorAll('.slide').forEach((s, k) => { s.classList.toggle('on', k === story.i); s.classList.toggle('rev', story.dir < 0); });
   el.querySelectorAll('.st-dots [data-dot]').forEach((d, k) => d.classList.toggle('on', k === story.i));
   paintStoryBar();
+  slideFx(el.querySelector('.slide.on'));
   // La animación solo corre a la vista: se para al salir de la primera pantalla y empieza de nuevo al volver
   if (story.i !== 0) { cancelAnimationFrame(tour.raf); if (tour.map) tour.map.stop(); }
   else if (story.dir < 0 && tour.map) { tour.map.invalidateSize(); playTour(); }
@@ -2047,7 +2140,7 @@ const planSig = () => JSON.stringify([state.alt, state.fuel, readCar(), $('salid
 async function stepCompute() {
   go(3);
   $('loading').hidden = false; $('result').hidden = true;
-  paintCar(); progress(0); busy(true, 'Calculando…');
+  paintCar(); progress(0); busy(true, 'Calculando…'); tickPrices();
   try {
     await state.stationsP;
     if (!state.stations) await loadStations();
@@ -2070,6 +2163,21 @@ async function stepCompute() {
     busy(false);
     status(measured ? '' : 'No he podido medir los desvíos exactos: los minutos son aproximados.');
   } catch (e) { busy(false); go(2); fail(e); }
+}
+
+// El surtidor de la pantalla de carga va enseñando precios mientras se comparan
+let fsTimer = 0;
+function tickPrices() {
+  clearInterval(fsTimer);
+  const el = $('fs-price');
+  if (!el || calmFx()) return;
+  const all = state.stations && state.stations.length ? state.stations : null;
+  fsTimer = setInterval(() => {
+    if ($('loading').hidden) return clearInterval(fsTimer);
+    let p = 1.38 + Math.random() * 0.3;
+    if (all) { const s = all[(Math.random() * all.length) | 0], fi = FUELS.find((f) => f.k === state.fuel).i; if (s && s[fi]) p = s[fi]; }
+    el.textContent = fmt(p, 3);
+  }, 140);
 }
 
 /* ---------- Último plan, para verlo sin cobertura ---------- */
