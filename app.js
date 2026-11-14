@@ -1317,12 +1317,27 @@ const isDark = () => {
   return skin === 'asfalto' || ((!skin || skin === 'senal') && (th ? th === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches));
 };
 const smooth = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+/* Mapas vectoriales de OpenFreeMap (gratis, sin clave) dibujados con MapLibre; si no cargan, los de OpenStreetMap de siempre */
+const MAP_STYLE = () => 'https://tiles.openfreemap.org/styles/' + (isDark() ? 'fiord' : 'positron');
 function baseMap(id) {
-  const map = L.map(id, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
+  const map = L.map(id, { zoomControl: true, attributionControl: true, scrollWheelZoom: false, zoomSnap: 0.25 });
   map.attributionControl.setPrefix(false);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  const raster = () => L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>', className: isDark() ? 'tiles-dark' : '',
   }).addTo(map);
+  let vec = null;
+  try {
+    if (L.maplibreGL && window.maplibregl) {
+      vec = L.maplibreGL({ style: MAP_STYLE(), attribution: '<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>', interactive: false }).addTo(map);
+      // Si el estilo no llega en unos segundos o el móvil no puede con WebGL, se vuelve al mapa de siempre
+      const gl = vec.getMaplibreMap && vec.getMaplibreMap();
+      let ok = false;
+      if (gl) { gl.once('load', () => { ok = true; }); gl.on('error', (e) => { if (!ok && e && e.error && /style|Failed to fetch|WebGL/i.test(String(e.error.message))) { map.removeLayer(vec); vec = null; raster(); ok = true; } }); }
+      setTimeout(() => { if (!ok && vec) { map.removeLayer(vec); vec = null; raster(); } }, 6000);
+    }
+  } catch (_) { vec = null; }
+  if (!vec) raster();
+  map.getContainer().classList.toggle('vector', !!vec);
   return map;
 }
 const endDot = (map, p, t) => L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#10202E', fillOpacity: 1 }).addTo(map).bindTooltip(t);
