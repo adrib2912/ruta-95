@@ -1712,28 +1712,30 @@ function renderResult() {
     `<div class="sl-trip">${renderTour(P)}${big.replace('class="linkbtn inline" data-go="2"', 'class="linkbtn inline" data-go="2" hidden')}
       <div class="sl-where">${badge(first)}<span><b>${esc(stName(first))}</b><small>${esc(stTown(first))} · km ${fmt(first.km, 0)} · ${fmt(first.price, 3)} €/L</small></span></div></div>`,
     ...ch.legs.map((lg, i) => {
-      const c = lg.s;
+      const c = lg.s, save = lg.L * P.ref - lg.pay - lg.detCost, last = i === ch.legs.length - 1;
       const food = c.food && c.food.length ? `<p><b>Para comer al lado:</b> ${c.food.map((f) => `${esc(f.name)} (${fmt(f.d, 0)} m)`).join(' · ')}</p>` : '';
+      const row = (k, label, val, cls = '') => `<div class="sr ${cls}" style="--d:${(0.55 + k * 0.32).toFixed(2)}s"><span>${label}</span><b>${val}</b></div>`;
       return `<div class="sl-stop"><section class="stopA">
         <div class="st-head"><div class="st-look">${badge(c)}<div class="st-id">${n > 1 ? `<small>Parada ${i + 1} de ${n}</small>` : ''}<h2>${esc(stName(c))}</h2><p>${esc(stTown(c))} · km ${fmt(c.km, 0)}</p></div></div><div class="st-p"><b>${fmt(c.price, 3)}</b><small>€/L${c.disc ? ' con descuento' : ''}</small></div></div>
-        <p class="st-when"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>Llegas hacia las <b>${hhmm(c.eta)}</b></p>
-        <div class="st-body">${tankSVG(lg, car)}
-          <dl class="kv">
-            <div><dt>Llegas con</dt><dd>${fmt(lg.arrive, 0)} L</dd></div>
-            <div><dt>${lg.full ? 'Llenas' : 'Echas solo'}</dt><dd class="add">+${fmt(lg.L, 0)} L</dd></div>
-            <div><dt>Pagas</dt><dd>${eur(lg.pay)}</dd></div>
-            <div><dt>En una normal</dt><dd class="muted">${eur(lg.L * P.ref)}</dd></div>
-            <div><dt>Desvío</dt><dd>${c.detourMin < 0.5 ? 'ninguno' : approx(c) + mins(c.detourMin)}</dd></div>
-          </dl></div></section>
-        <div class="small-print"><p>${why}</p><p>${esc(nice(c.s[4]))}${c.s[8] ? ' · Horario ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (sin confirmar)' : ''}</p>${food}</div></div>`;
+        <p class="st-when sr" style="--d:.1s"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>Llegas hacia las <b>${hhmm(c.eta)}</b> con <b>${fmt(lg.arrive, 0)} L</b></span></p>
+        <div class="st-story">${tankSVG(lg, car)}
+          <div class="st-rows">
+            ${row(0, lg.full ? 'Llenas' : 'Echas', `+${fmt(lg.L, 0)} L`, 'add')}
+            ${row(1, 'Pagas', eur(lg.pay))}
+            ${row(2, 'En una normal', eur(lg.L * P.ref), 'muted')}
+            ${save > 0.005 ? row(3, 'Te ahorras', eur(save), 'save') : ''}
+          </div></div></section>
+        ${last ? `<p class="st-nexthint sr" style="--d:2s">Siguiente: <b>abre la ruta en Google Maps con la parada ya puesta</b></p>` : ''}
+        <div class="small-print"><p>${why}${c.detourMin >= 0.5 ? ` Desvío: ${approx(c)}${mins(c.detourMin)}.` : ''}</p><p>${esc(nice(c.s[4]))}${c.s[8] ? ' · Horario ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (sin confirmar)' : ''}</p>${food}</div></div>`;
     }),
-    `<div class="sl-cmp">${renderCompare(P)}${renderTank(P)}</div>`,
     `<div class="sl-end card"><h2>Listo para salir</h2>
       <p>Para en <b>${esc(stops.map(stName).join(' y '))}</b> (${stops.map((c) => 'km ' + fmt(c.km, 0)).join(' y ')}) hacia las <b>${stops.map((c) => hhmm(c.eta)).join(' y ')}</b> y llegarás a ${esc(state.dest.name)} con unos <b>${fmt(ch.endFuel, 0)} L</b>.</p>
-      <a class="goBig" href="${gmaps(ch.stops)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c-3.9 0-7 3-7 6.9 0 5 7 12.1 7 12.1s7-7.1 7-12.1c0-3.9-3.1-6.9-7-6.9z" fill="currentColor"/><circle cx="12" cy="9.4" r="2.6" fill="var(--cta-bg)"/></svg>Ir en Google Maps</a>
+      <a class="goBig" href="${gmaps(ch.stops)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c-3.9 0-7 3-7 6.9 0 5 7 12.1 7 12.1s7-7.1 7-12.1c0-3.9-3.1-6.9-7-6.9z" fill="currentColor"/><circle cx="12" cy="9.4" r="2.6" fill="var(--cta-bg)"/></svg><span>Abrir en Google Maps<small>La ruta hasta ${esc(state.dest.name)} con la parada ya puesta</small></span></a>
       ${stops.map((c) => `<a class="seeSt" href="${placeUrl(c)}" target="_blank" rel="noopener">${badge(c)}<span><b>Ver ${esc(stName(c))} en el mapa</b><small>${esc(nice(c.s[4]))}, ${esc(stTown(c))}</small></span><i aria-hidden="true">›</i></a>`).join('')}
       <div class="acts"><button type="button" class="shareA" data-share>${SHARE_SVG}Compartir</button><button type="button" class="seeall" data-seeall>Ver todo el detalle</button></div>
+      <button type="button" class="linkbtn more" data-dot="${ch.legs.length + 2}">Comparar con otras gasolineras ›</button>
       <div class="small-print">${trip}</div></div>`,
+    `<div class="sl-cmp"><p class="opt-tag">Opcional</p>${renderCompare(P)}${renderTank(P)}</div>`,
   ];
   openStory(slides);
   requestAnimationFrame(() => playTour());
@@ -1775,10 +1777,18 @@ const ARROW_R = '<svg class="ar" viewBox="0 0 24 24" aria-hidden="true"><path d=
 function paintStoryBar() {
   if (state.panel !== 3) return;
   const inStory = !$('story').hidden;
-  $('btn-back').innerHTML = inStory && story.i > 0 ? ARROW_L + 'Anterior' : ARROW_L + 'Coche';
-  $('btn-next').innerHTML = inStory && story.i < story.n - 1 ? (story.i === 0 ? 'Ver dónde parar' : 'Siguiente') + ARROW_R : 'Nueva búsqueda';
-  $('btn-next').classList.toggle('nudge', inStory && story.i === 0);
-  $('btn-next').classList.toggle('quiet', inStory && story.i === story.n - 1);
+  const end = story.n - 2, i = story.i;   // las dos últimas: «Listo para salir» y la comparación opcional
+  $('btn-back').innerHTML = inStory && i > 0 ? ARROW_L + 'Anterior' : ARROW_L + 'Coche';
+  let label = 'Nueva búsqueda';
+  if (inStory) {
+    if (i === 0) label = 'Ver dónde parar' + ARROW_R;
+    else if (i < end - 1) label = 'Siguiente parada' + ARROW_R;
+    else if (i === end - 1) label = 'Listo para salir' + ARROW_R;
+    else if (i === end) label = 'Comparar precios' + ARROW_R;
+  }
+  $('btn-next').innerHTML = label;
+  $('btn-next').classList.toggle('nudge', inStory && (i === 0 || i === end - 1));
+  $('btn-next').classList.toggle('quiet', !inStory || i >= end);
 }
 function closeStory() {
   // El mapa de la animación pasa a la vista completa, arriba

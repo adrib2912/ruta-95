@@ -82,7 +82,7 @@ with sync_playwright() as p:
         pg.click('#btn-next'); pg.wait_for_selector('.slide.on', timeout=20000); pg.wait_for_timeout(1800)
         n = pg.locator('.slide').count(); print('pantallas', n)
         for k in range(n):
-            pg.screenshot(path=f'{OUT}/s{k}-{scheme}.png', full_page=True)
+            pg.wait_for_timeout(2400); pg.screenshot(path=f'{OUT}/s{k}-{scheme}.png', full_page=True)
             if k < n - 1: pg.click('#btn-next'); pg.wait_for_timeout(500)
         # Ida y vuelta entre pantallas varias veces con los botones de abajo
         seq = []
@@ -95,7 +95,7 @@ with sync_playwright() as p:
         for dx in (-200, 200):
             pg.evaluate('''([x,y,dx])=>{const el=document.querySelector('.slide.on'); const o={bubbles:true,clientX:x,clientY:y,pointerId:1}; el.dispatchEvent(new PointerEvent('pointerdown',o)); el.dispatchEvent(new PointerEvent('pointerup',{...o,clientX:x+dx}));}''', [box['x']+200, box['y']+150, dx])
             pg.wait_for_timeout(250); print('tras deslizar', dx, pg.evaluate('()=>story.i'))
-        pg.evaluate('()=>showSlide(story.n-1)'); pg.wait_for_timeout(200)
+        pg.evaluate('()=>showSlide(story.n-2)'); pg.wait_for_timeout(200)
         # Navegación: Atrás recorre las pantallas; ir al coche y volver sin recalcular
         pg.click('#btn-back'); pg.wait_for_timeout(300); a = pg.evaluate('()=>story.i')
         pg.click('#wiz [data-go="2"]'); pg.wait_for_timeout(400); q = pg.evaluate('()=>QS[state.q]'); lbl = pg.inner_text('#btn-next')
@@ -104,7 +104,7 @@ with sync_playwright() as p:
         while pg.evaluate('()=>state.panel') == 2:
             pg.click('#btn-next'); pg.wait_for_timeout(400)
         print('nav: atras->pantalla', a, '| coche empieza en', q, '| boton', repr(lbl), '| vuelve a panel', pg.evaluate('()=>state.panel'), 'cargando', pg.is_visible('#loading'), 'pantalla', pg.evaluate('()=>story.i'))
-        pg.evaluate('()=>showSlide(story.n-1)'); pg.wait_for_timeout(300)
+        pg.evaluate('()=>showSlide(story.n-2)'); pg.wait_for_timeout(300)
         pg.click('[data-seeall]'); pg.wait_for_selector('.planA', state='visible'); pg.wait_for_timeout(600)
         print('mapa movido', pg.evaluate("()=>!!document.querySelector('#strip .tour')"))
         pg.screenshot(path=f'{OUT}/w4-{scheme}.png', full_page=True)
