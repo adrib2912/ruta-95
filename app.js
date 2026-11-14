@@ -268,12 +268,12 @@ function preparePlan(route, near, car) {
 
 /* Hora de comer o cenar durante el viaje: el tramo de ruta en que cae, si dura al menos 25 minutos. */
 function mealWindow(route, depart) {
-  if (!route || route.durMin < 60) return null;
+  if (!route || route.durMin < 90) return null;   // en viajes de menos de hora y media no se pregunta
   const t0 = depart.getTime(), t1 = t0 + route.durMin * 60000;
   let best = null;
   for (let d = 0; d <= 2; d++) {
     const base = new Date(depart); base.setHours(0, 0, 0, 0); base.setDate(base.getDate() + d);
-    for (const [n, a, b] of [['comer', 13 * 60, 15 * 60 + 30], ['cenar', 20 * 60 + 30, 22 * 60 + 30]]) {
+    for (const [n, a, b] of [['comer', 13 * 60, 15 * 60 + 30], ['cenar', 20 * 60, 23 * 60]]) {
       const wa = Math.max(base.getTime() + a * 60000, t0 + 30 * 60000), wb = Math.min(base.getTime() + b * 60000, t1 - 15 * 60000);
       if (wb - wa >= 25 * 60000 && (!best || wa < best.a)) best = { n, a: wa, b: wb };
     }
@@ -796,7 +796,7 @@ const DETOURS = [
   { k: 'any', n: 'Lo que haga falta', d: 'Si el ahorro lo compensa', corridor: 8, max: Infinity },
 ];
 const Q_ALL = ['coche', 'fuel', 'nums', 'umbral', 'desvio', 'tucoche', 'comida', 'nivel'];
-const Q_NAMES = { tucoche: 'Tu coche guardado', coche: 'Tu coche', fuel: 'Combustible', nums: 'Consumo y depósito', umbral: 'Cuándo repostar', desvio: 'Desvío', comida: 'Comida', nivel: 'Depósito ahora' };
+const Q_NAMES = { tucoche: 'Tu coche guardado', coche: 'Tu coche', fuel: 'Combustible', nums: 'Consumo y depósito', umbral: 'Cuándo repostar', desvio: 'Desvío', comida: 'Comida o cena', nivel: 'Depósito ahora' };
 let QS = Q_ALL.filter((q) => q !== 'comida');
 const currentMeal = () => (state.routes && state.routes[state.alt] ? mealWindow(state.routes[state.alt], readDepart()) : null);
 // Quien ya rellenó el coche empieza en lo que cambia en cada viaje: la comida (si toca) y el depósito
@@ -1076,6 +1076,7 @@ function updateGauge() {
   $('umbral').innerHTML = THRESHOLDS.map((x) => tile('data-f', x.f, Math.abs(x.f - state.frac) < 0.01, x.n, `${x.d} · unos ${fmt(car.tank * x.f, 0)} L`)).join('');
   const meal = currentMeal();
   if (meal) {
+    $('comida-title').textContent = `¿Paras a ${meal.n} por el camino?`;
     $('comida-sub').textContent = `Pasarás por la hora de ${meal.n} entre las ${hhmm(new Date(meal.a))} y las ${hhmm(new Date(meal.b))}, hacia el km ${fmt(meal.kmA, 0)}–${fmt(meal.kmB, 0)}.`;
     $('comida').innerHTML = tile('data-eat', 'yes', state.eat === 'yes', `Sí, aprovecho para ${meal.n}`, 'Busco gasolinera con restaurante al lado') + tile('data-eat', 'no', state.eat !== 'yes', 'No, solo gasolina', 'Paro lo justo');
   }
