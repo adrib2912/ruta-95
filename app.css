@@ -476,9 +476,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ===== Aspecto "Moderno" (por defecto): estilo iOS, tipografía del sistema, tarjetas agrupadas y vidrio ===== */
 :root:not([data-skin]) {
-  --bg: #F2F2F7; --surface: #FFFFFF; --fill: rgba(118,118,128,.12); --ink: #1C1C1E; --muted: #6C6C70; --line: #E5E5EA;
-  --blue: #007AFF; --blue-soft: #E8F1FF; --red: #FF3B30; --good: #248A3D; --good-soft: #E4F6E8; --warn: #B25000; --warn-soft: #FFF1DE;
-  --sign: #1D4FA8; --sign-ink: #1C1C1E; --sign-line: #E5E5EA; --cta-bg: #007AFF; --cta-ink: #FFFFFF;
+  --bg: #F2F2F7; --surface: #FFFFFF; --fill: rgba(118,118,128,.12); --ink: #1C1C1E; --muted: #636366; --line: #E5E5EA;
+  --blue: #0062CC; --blue-soft: #E8F1FF; --red: #FF3B30; --good: #1F7A35; --good-soft: #E4F6E8; --warn: #B25000; --warn-soft: #FFF1DE;
+  --sign: #1D4FA8; --sign-ink: #1C1C1E; --sign-line: #E5E5EA; --cta-bg: #0062CC; --cta-ink: #FFFFFF; --on-blue: #0062CC;
   --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.05);
   --f-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif;
   --f-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
@@ -486,15 +486,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-skin]):not([data-theme="light"]) {
-    --bg: #000000; --surface: #1C1C1E; --fill: rgba(118,118,128,.24); --ink: #F2F2F7; --muted: #98989F; --line: #38383A;
-    --blue: #0A84FF; --blue-soft: #0F2A4A; --red: #FF453A; --good: #30D158; --good-soft: #10331C; --warn: #FF9F0A; --warn-soft: #3A2A0E;
-    --sign-ink: #F2F2F7; --sign-line: #38383A; --cta-bg: #0A84FF; --shadow: none; color-scheme: dark;
+    --bg: #000000; --surface: #1C1C1E; --fill: rgba(118,118,128,.24); --ink: #F2F2F7; --muted: #A1A1A8; --line: #38383A;
+    --blue: #409CFF; --blue-soft: #0F2A4A; --red: #FF453A; --good: #30D158; --good-soft: #10331C; --warn: #FF9F0A; --warn-soft: #3A2A0E;
+    --sign-ink: #F2F2F7; --sign-line: #38383A; --cta-ink: #FFFFFF; --cta-bg: #0071E3; --on-blue: #0071E3; --shadow: none; color-scheme: dark;
   }
 }
 :root:not([data-skin])[data-theme="dark"] {
-  --bg: #000000; --surface: #1C1C1E; --fill: rgba(118,118,128,.24); --ink: #F2F2F7; --muted: #98989F; --line: #38383A;
-  --blue: #0A84FF; --blue-soft: #0F2A4A; --red: #FF453A; --good: #30D158; --good-soft: #10331C; --warn: #FF9F0A; --warn-soft: #3A2A0E;
-  --sign-ink: #F2F2F7; --sign-line: #38383A; --cta-bg: #0A84FF; --shadow: none; color-scheme: dark;
+  --bg: #000000; --surface: #1C1C1E; --fill: rgba(118,118,128,.24); --ink: #F2F2F7; --muted: #A1A1A8; --line: #38383A;
+  --blue: #409CFF; --blue-soft: #0F2A4A; --red: #FF453A; --good: #30D158; --good-soft: #10331C; --warn: #FF9F0A; --warn-soft: #3A2A0E;
+  --sign-ink: #F2F2F7; --sign-line: #38383A; --cta-ink: #FFFFFF; --cta-bg: #0071E3; --on-blue: #0071E3; --shadow: none; color-scheme: dark;
 }
 html:not([data-skin]) body { -webkit-font-smoothing: antialiased; letter-spacing: -.01em; }
 /* Sin mayúsculas forzadas ni tipografía estrecha */
@@ -525,7 +525,7 @@ html:not([data-skin]) :is(.linkbtn, .adv summary, .breakdown summary) { color: v
 html:not([data-skin]) .qarrow { border: 0; background: var(--fill); color: var(--blue); }
 html:not([data-skin]) .stepper button { border: 0; background: var(--fill); color: var(--blue); font-weight: 500; }
 html:not([data-skin]) :is(.mapbtn, .sorter button, .skins button, .chip) { border: 0; background: var(--fill); }
-html:not([data-skin]) :is(.mapbtn, .sorter button, .skins button, .chip)[aria-pressed="true"], html:not([data-skin]) .chip[aria-checked="true"] { background: var(--blue); color: #fff; }
+html:not([data-skin]) :is(.mapbtn, .sorter button, .skins button, .chip)[aria-pressed="true"], html:not([data-skin]) .chip[aria-checked="true"] { background: var(--on-blue, var(--blue)); color: #fff; }
 /* Opciones: marcadas en azul suave con borde azul, como una lista de selección */
 html:not([data-skin]) .tile { border-radius: 16px; }
 html:not([data-skin]) .tile b { font: 600 18px/1.2 var(--f-body); letter-spacing: -.01em; }
@@ -616,7 +616,7 @@ body.locked { overflow: hidden; }
 .daychips button { flex: none; min-width: 64px; padding: 8px 10px; border: 0; border-radius: 12px; background: var(--fill, var(--line)); color: var(--ink); display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .daychips b { font: 600 14px var(--f-body); text-transform: capitalize; }
 .daychips small { font-size: 13px; color: var(--muted); }
-.daychips button[aria-checked="true"] { background: var(--blue); color: #fff; }
+.daychips button[aria-checked="true"] { background: var(--on-blue, var(--blue)); color: #fff; }
 .daychips button[aria-checked="true"] small { color: rgba(255,255,255,.85); }
 .timerow { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 16px; }
 .timerow input { border: 0; border-radius: 12px; background: var(--fill, var(--line)); color: var(--ink); font: 700 24px var(--f-display); padding: 8px 14px; min-height: 48px; color-scheme: inherit; }
@@ -659,7 +659,7 @@ body.locked { overflow: hidden; }
 .st-prev, .st-next { border: 0; min-height: 46px; border-radius: 14px; background: var(--fill, var(--line)); color: var(--blue); font: 600 16px var(--f-body); display: inline-flex; align-items: center; gap: 4px; padding: 0 16px; }
 .st-prev { width: 46px; padding: 0; justify-content: center; }
 .st-prev:disabled { opacity: .35; }
-.st-next { background: var(--blue); color: #fff; }
+.st-next { background: var(--on-blue, var(--blue)); color: #fff; }
 .st-next[hidden] { display: inline-flex !important; visibility: hidden; }
 .st-dots { display: flex; gap: 6px; }
 .st-dots i { width: 7px; height: 7px; border-radius: 4px; background: var(--line); transition: width .25s, background .25s; }
@@ -764,7 +764,7 @@ a.sl-where { color: inherit; text-decoration: none; }
 .st-go svg { width: 30px; height: 30px; flex: none; }
 .st-go span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .st-go b { font: 700 20px var(--f-body); letter-spacing: -.01em; }
-.st-go small { font: 500 14px var(--f-body); opacity: .9; }
+.st-go small { font: 500 14px var(--f-body); opacity: 1; }
 .st-go i { font-style: normal; font-size: 34px; line-height: 1; }
 @media (prefers-reduced-motion: no-preference) { .slide.on .st-go { animation: rise .5s cubic-bezier(.2,.8,.2,1) both, nudge 1.6s ease-in-out 3s 2; animation-delay: var(--d), 3s; } }
 .st-nexthint { display: none; }
@@ -854,7 +854,7 @@ a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !im
 .b-star svg { width: 100%; height: 100%; display: block; }
 .st-save b, .hero-n .count { display: inline-block; font-variant-numeric: tabular-nums; }
 /* Surtidor → ✓ en «Listo para salir» */
-.done-ic { width: 72px; height: 72px; border-radius: 22px; background: var(--blue); display: grid; place-items: center; transition: background-color .5s ease .2s; box-shadow: 0 10px 24px rgba(0,122,255,.25); }
+.done-ic { width: 72px; height: 72px; border-radius: 22px; background: var(--on-blue, var(--blue)); display: grid; place-items: center; transition: background-color .5s ease .2s; box-shadow: 0 10px 24px rgba(0,122,255,.25); }
 .done-ic svg { width: 46px; height: 46px; }
 .done-ic .mph { fill: #fff; }
 .done-ic .mph-win { fill: var(--blue); transition: opacity .2s, fill .5s .2s; }
@@ -882,3 +882,15 @@ a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !im
 @keyframes gfill { 0% { transform: scaleX(.12); } 80%, 100% { transform: scaleX(1); } }
 @keyframes carIn { from { transform: translateX(140px); opacity: 0; } }
 @keyframes idle { to { transform: translateY(-1.2px); } }
+
+/* Revisión de contraste (Impeccable) */
+html:not([data-skin]) #car-model::placeholder, html:not([data-skin]) input::placeholder { color: var(--muted); opacity: 1; }
+.pin.top { background: #D70015 !important; }
+.st-go small, .goBig small { color: #fff; }
+html:not([data-skin]) .wiz i { opacity: 1; color: var(--muted); }
+html:not([data-skin]) .tile[aria-checked="true"] small { color: var(--ink); opacity: .85; }
+@media (prefers-color-scheme: dark) { html:not([data-skin]):not([data-theme="light"]) .st-go, html:not([data-skin]):not([data-theme="light"]) .goBig { box-shadow: none; } }
+html[data-theme="dark"]:not([data-skin]) :is(.st-go, .goBig) { box-shadow: none; }
+/* En la pantalla de la parada, el único botón principal es el de Google Maps */
+#btn-next.quiet { background: var(--fill, var(--line)); color: var(--blue); box-shadow: none; }
+html:not([data-skin]) :is(.goA, .go, .goBig, .st-go) { color: #fff; }

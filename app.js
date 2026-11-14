@@ -1793,7 +1793,7 @@ function renderCompare(P) {
       if (rows.length >= 3) break;
     }
   }
-  rows.push({ n: 'Gasolinera normal de carretera', sub: `${fmt(P.ref, 3)} €/L`, cost: L * P.ref });
+  rows.push({ n: 'Gasolinera media de la ruta', sub: `${fmt(P.ref, 3)} €/L`, cost: L * P.ref });
   const dear = P.cands.reduce((a, c) => (c.price > a.price ? c : a), P.cands[0]);
   rows.push({ n: 'La más cara de la ruta', sub: `${fmt(dear.price, 3)} €/L · ${stTown(dear)}`, cost: L * dear.price });
   const max = Math.max(...rows.map((r) => r.cost));
@@ -1863,7 +1863,7 @@ function renderResult() {
           <div><dt>Llegas con</dt><dd>${fmt(lg.arrive, 0)} L</dd></div>
           <div><dt>${lg.full ? 'Llenas' : 'Echas solo'}</dt><dd class="add">+${fmt(lg.L, 0)} L</dd></div>
           <div><dt>Pagas</dt><dd>${eur(lg.pay)}</dd></div>
-          <div><dt>En una normal</dt><dd class="muted">${eur(lg.L * P.ref)}</dd></div>
+          <div><dt>Precio medio</dt><dd class="muted">${eur(lg.L * P.ref)}</dd></div>
           <div><dt>Desvío</dt><dd>${c.detourMin < 0.5 ? 'ninguno' : approx(c) + mins(c.detourMin)}</dd></div>
         </dl></div>
       <p class="st-addr">${esc(nice(c.s[4]))}${c.s[8] ? ' · ' + esc(c.s[8]) : ''}${c.open === null && c.s[8] ? ' (horario sin confirmar)' : ''}</p>
@@ -1911,7 +1911,7 @@ function renderResult() {
           <div class="st-rows">
             ${row(0, lg.full ? 'Llenas' : 'Echas', `+${fmt(lg.L, 0)} L`, 'add')}
             ${row(1, 'Pagas', eur(lg.pay))}
-            ${row(2, 'En una normal', eur(lg.L * P.ref), 'muted')}
+            ${row(2, 'Precio medio', eur(lg.L * P.ref), 'muted')}
           </div></div>
         ${save > 0.005 ? `<div class="st-save sr" style="--d:1.6s"><span>Te ahorras</span><b data-to="${save.toFixed(2)}">${eur(save)}</b></div>` : ''}</section>
         ${last ? `<a class="st-go sr" style="--d:2.1s" href="${gmaps(ch.stops)}" target="_blank" rel="noopener" data-gomaps><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6 9 4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg><span><b>¡Vamos! Abrir en Google Maps</b><small>La ruta con la parada ya puesta</small></span><i aria-hidden="true">›</i></a>` : `<button type="button" class="st-go sr" style="--d:2.1s" data-next><span><b>Ver la siguiente parada</b></span><i aria-hidden="true">›</i></button>`}
@@ -2058,7 +2058,8 @@ function paintStoryBar() {
   }
   $('btn-next').innerHTML = label;
   $('btn-next').classList.toggle('nudge', inStory && i === 0);
-  $('btn-next').classList.toggle('quiet', !inStory || i >= end);
+  const hasGo = inStory && !!document.querySelector('#story .slide.on :is(.goBig, .st-go)');
+  $('btn-next').classList.toggle('quiet', !inStory || i >= end || hasGo);
 }
 function closeStory() {
   // El mapa de la animación pasa a la vista completa, arriba
