@@ -1044,15 +1044,26 @@ function playTour() {
   if (cv) el.appendChild(cv); else el.innerHTML = `<span class="veh2d">${carSVG()}</span>`;
   const mk = L.marker(pts[0], { icon: L.divIcon({ className: '', html: '', iconSize: [0, 0] }), zIndexOffset: 2000 }).addTo(map);
   mk.getElement().appendChild(el);
-  // Distancia acumulada de cada punto, para mover el coche a velocidad constante
+  // Recorrido remuestreado a pasos iguales y suavizado: quita los zigzags de la geometría, que hacían temblar el coche,
+  // y deja pocos puntos para que redibujar la línea recorrida no cueste en cada fotograma
   const cum = [0];
   for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + hav(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]));
-  const kmScale = P.D / cum[cum.length - 1];
+  const total = cum[cum.length - 1], N = 700, rp = [];
+  for (let n = 0, j = 1; n <= N; n++) {
+    const d = (total * n) / N;
+    while (j < cum.length - 1 && cum[j] < d) j++;
+    const k = (d - cum[j - 1]) / Math.max(1e-9, cum[j] - cum[j - 1]);
+    rp.push([pts[j - 1][0] + (pts[j][0] - pts[j - 1][0]) * k, pts[j - 1][1] + (pts[j][1] - pts[j - 1][1]) * k]);
+  }
+  const sp = rp.map((p, i) => {
+    if (i < 3 || i > N - 3) return p;
+    let la = 0, lo = 0;
+    for (let d = -3; d <= 3; d++) { la += rp[i + d][0]; lo += rp[i + d][1]; }
+    return [la / 7, lo / 7];
+  });
   const at = (km) => {
-    const d = km / kmScale; let lo = 0, hi = cum.length - 1;
-    while (lo < hi) { const m = (lo + hi) >> 1; if (cum[m] < d) lo = m + 1; else hi = m; }
-    const i = Math.max(1, lo), k = (d - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
-    return { i, ll: [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * k, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * k] };
+    const f = Math.max(0, Math.min(N, (km / P.D) * N)), i = Math.min(N, Math.max(1, Math.ceil(f))), k = f - (i - 1);
+    return { i, ll: [sp[i - 1][0] + (sp[i][0] - sp[i - 1][0]) * k, sp[i - 1][1] + (sp[i][1] - sp[i - 1][1]) * k] };
   };
   // Litros a lo largo del viaje (mismo perfil que el gráfico del depósito)
   const fuelAt = (km, filled) => {
@@ -1072,19 +1083,31 @@ function playTour() {
   }
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const filled = ch.legs.map(() => false);
-  let si = 0, t0 = performance.now(), last = at(0), heading = 0, zoomed = false;
+  let si = 0, t0 = performance.now(), heading = 0, zoomed = false;
   const hud = (km, fuel, msg) => {
     $('tour-km').textContent = 'km ' + fmt(km, 0);
     $('tour-fuel').style.width = Math.max(0, Math.min(100, fuel / car.tank * 100)).toFixed(1) + '%';
     $('tour-fuel').classList.toggle('low', fuel <= car.reserve);
     if (msg) $('tour-msg').textContent = msg;
   };
-  const place = (km) => {
+  // Rumbo: hacia un punto algo más adelante en la ruta, y el giro se suaviza con el tiempo (por el camino más corto)
+  const look = Math.max(1.5, P.D * 0.02);
+  let lastT = 0;
+  const steer = (km, now) => {
+    const ahead = km + look <= P.D, p1 = at(ahead ? km : Math.max(0, km - look)), p2 = at(ahead ? km + look : km);
+    const a = map.latLngToContainerPoint(p1.ll), b = map.latLngToContainerPoint(p2.ll);
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 0.5) return;
+    const target = Math.atan2(b.y - a.y, b.x - a.x);
+    if (!lastT) { heading = target; lastT = now; return; }
+    const dt = Math.min(64, now - lastT); lastT = now;
+    let diff = target - heading;
+    diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+    heading += diff * (1 - Math.exp(-dt / 140));
+  };
+  const place = (km, now = performance.now()) => {
     const p = at(km);
     mk.setLatLng(p.ll);
-    const a = map.latLngToContainerPoint(last.ll), b = map.latLngToContainerPoint(p.ll);
-    if (Math.hypot(b.x - a.x, b.y - a.y) > 0.5) heading = Math.atan2(b.y - a.y, b.x - a.x);
-    last = p;
+    steer(km, now);
     if (cv) tourRender(heading); else el.firstChild.style.transform = Math.cos(heading) < 0 ? 'scaleX(-1)' : '';
   };
   if (reduce) {       // sin animación: el coche directamente en la gasolinera
@@ -1098,8 +1121,9 @@ function playTour() {
     if (st.type === 'drive') {
       const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
       const km = st.from + (st.to - st.from) * e;
-      place(km);
-      done.setLatLngs([...pts.slice(0, at(km).i), at(km).ll]);
+      place(km, now);
+      const p = at(km);
+      done.setLatLngs([...sp.slice(0, p.i), p.ll]);
       const toStop = st.leg < stopsKm.length;
       hud(km, fuelAt(km, filled), toStop ? (ch.stops.length > 1 ? `Rumbo a la parada ${st.leg + 1}` : 'Rumbo a la gasolinera') : `Rumbo a ${state.dest.name}`);
     } else {
@@ -1107,7 +1131,7 @@ function playTour() {
       if (!zoomed) { zoomed = true; map.flyTo([c.lat, c.lon], 12, { duration: 0.7 }); }
       const fill = k < 0.3 ? 0 : Math.min(1, (k - 0.3) / 0.5);
       hud(c.km, lg.arrive + lg.L * fill, `Reposta aquí: ${stName(c)}, ${stTown(c)} · +${fmt(lg.L * fill, 0)} L`);
-      tourRender(heading);
+      place(c.km, now);
     }
     if (k >= 1) {
       if (st.type === 'stop') { filled[st.leg] = true; zoomed = false; map.flyToBounds(whole, { padding: [28, 28], duration: 0.6 }); }
