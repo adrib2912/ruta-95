@@ -1,26 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs>
-<radialGradient id="bgb" cx=".5" cy=".32" r=".8"><stop offset="0" stop-color="#2B4470"/><stop offset=".6" stop-color="#121D33"/><stop offset="1" stop-color="#070C17"/></radialGradient></defs>
-<rect width="1024" height="1024" rx="228" fill="url(#bgb)"/>
-<ellipse cx="512" cy="850" rx="240" ry="30" fill="#000" opacity=".35"/>
-<defs>
- <linearGradient id="brim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".55" stop-color="#C9D2DC"/><stop offset="1" stop-color="#F7F9FB"/></linearGradient>
- <linearGradient id="bblue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F6BD6"/><stop offset="1" stop-color="#123A86"/></linearGradient>
- <linearGradient id="bred" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4474B"/><stop offset="1" stop-color="#B5121D"/></linearGradient>
- <linearGradient id="bgl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".34"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
- <clipPath id="bc"><path d="M15 5.5Q50 1.5 85 5.5Q93 6.5 93 14.5V48C93 73 75 89 50 98C25 89 7 73 7 48V14.5Q7 6.5 15 5.5Z" transform="translate(50 52) scale(.86) translate(-50 -52)"/></clipPath>
- <filter id="bsh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="3" stdDeviation="3.2" flood-color="#000" flood-opacity="0.55"/></filter>
- <filter id="bts"><feDropShadow dx="0" dy="1" stdDeviation=".8" flood-color="#06183F" flood-opacity=".45"/></filter>
-</defs>
-<g transform="translate(192 170) scale(6.4)">
- <path d="M15 5.5Q50 1.5 85 5.5Q93 6.5 93 14.5V48C93 73 75 89 50 98C25 89 7 73 7 48V14.5Q7 6.5 15 5.5Z" fill="url(#brim)" filter="url(#bsh)"/>
- <path d="M15 5.5Q50 1.5 85 5.5Q93 6.5 93 14.5V48C93 73 75 89 50 98C25 89 7 73 7 48V14.5Q7 6.5 15 5.5Z" fill="none" stroke="#000" stroke-opacity=".12" stroke-width=".6"/>
- <g clip-path="url(#bc)">
-  <rect width="100" height="100" fill="url(#bblue)"/>
-  <rect width="100" height="33" fill="url(#bred)"/>
-  <rect y="33" width="100" height="2.6" fill="#fff"/>
-  <path d="M0 0H100V44C70 38 30 38 0 46Z" fill="url(#bgl)"/>
- </g>
- 
- <text x="50" y="25.2" text-anchor="middle" font-family="Inter Display, Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-weight="800" font-size="13" letter-spacing="2" fill="#fff">RUTA</text>
- <text class="n95" x="50" y="77" text-anchor="middle" font-family="Inter Display, Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-weight="900" font-size="42" fill="#fff" filter="url(#bts)">95</text>
-</g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024"><defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2368C4"/><stop offset="1" stop-color="#1550A0"/></linearGradient></defs><rect width="1024" height="1024" rx="228" fill="url(#bg)"/><rect x="92" y="92" width="840" height="840" rx="150" fill="none" stroke="#fff" stroke-width="24"/><rect x="186" y="200" width="270" height="270" rx="30" fill="#fff"/>
+<g transform="translate(250 234) scale(.42)"><rect x="0" y="0" width="270" height="440" rx="34" fill="#1A5BB0"/><rect x="40" y="48" width="190" height="140" rx="18" fill="#fff"/>
+<rect x="-30" y="430" width="330" height="54" rx="16" fill="#1A5BB0"/>
+<path d="M270 150H318Q352 150 352 184V352Q352 384 384 384Q416 384 416 352V120L372 72" fill="none" stroke="#1A5BB0" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></g>
+<text x="680" y="446" text-anchor="middle" font-family="Inter Display, Inter, -apple-system, BlinkMacSystemFont, Arial, sans-serif" font-weight="900" font-size="250" letter-spacing="-6" fill="#fff">95</text><path d="M440 870V770L620 590" fill="none" stroke="#fff" stroke-width="58" stroke-linecap="round" stroke-linejoin="round"/><path d="M698 512L674 655L555 536Z" fill="#fff" stroke="#fff" stroke-width="10" stroke-linejoin="round"/></svg>

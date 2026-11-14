@@ -60,7 +60,7 @@ with sync_playwright() as p:
         pg=b.new_page(viewport={'width':390,'height':844}, device_scale_factor=2, color_scheme=scheme)
         errs=[]; pg.on('pageerror', lambda e: errs.append(str(e))); pg.on('console', lambda m: errs.append(m.text) if m.type=='error' and 'ERR_FAILED' not in m.text and 'Failed to load resource' not in m.text else None)
         pg.route('**/*', handle); pg.goto('http://127.0.0.1:8765/index.html'); pg.wait_for_timeout(800)
-        pg.click('#btn-when'); pg.fill('#salida', '2026-11-16T11:30')
+        pg.click('[data-when="later"]'); pg.click('[data-day="2"]'); pg.fill('#hora', '11:30'); pg.dispatch_event('#hora', 'change'); print('salida', pg.input_value('#salida'), pg.inner_text('#when-later')); pg.screenshot(path=f'{OUT}/when-{scheme}.png')
         pg.click('#origen'); pg.keyboard.type('mad'); pg.wait_for_timeout(700)
         sug=pg.locator('#sugg-origen li').all_inner_texts(); pg.locator('#sugg-origen li').first.dispatch_event('pointerdown')
         pg.click('#destino'); pg.keyboard.type('valen'); pg.wait_for_timeout(700); pg.locator('#sugg-destino li').first.dispatch_event('pointerdown')

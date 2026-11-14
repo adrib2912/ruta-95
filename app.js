@@ -630,6 +630,14 @@ function avgFuelPrice() {
   avgPriceC = { k: f.k, v: v || 1.5 };
   return avgPriceC.v;
 }
+/* Versión corta para la tarjeta de la ruta */
+function tollShort(r, routes) {
+  const free = routes.filter((x) => x !== r && tollOf(x).eur < 0.05).sort((a, b) => a.durMin - b.durMin)[0];
+  if (!free) return '';
+  const extra = tollOf(r).eur + (r.distKm - free.distKm) * readCar().cons / 100 * avgFuelPrice(), mins = Math.round(free.durMin - r.durMin);
+  const pay = eurR(Math.max(0, extra));
+  return mins >= 1 ? `${dur(mins)} antes por unos ${pay} más` : mins <= -1 ? `Tardas ${dur(-mins)} más y pagas unos ${pay} más` : `Mismo tiempo y unos ${pay} más`;
+}
 /* Comparación de una ruta con peaje frente a la mejor sin peaje de las que hay */
 function tollCompare(r, routes) {
   const t = tollOf(r);
@@ -1078,14 +1086,46 @@ function locate() {
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
   });
 }
+/* Hora de salida, como en las apps de taxi: «Salir ahora» por defecto o «Programar» con día y hora.
+   El valor real vive en #salida (aaaa-mm-ddThh:mm); vacío = ahora. */
+const pad2 = (n) => String(n).padStart(2, '0');
+const localISO = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 function whenLabel() {
   const v = $('salida').value, d = v ? new Date(v) : null;
   if (!d || Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const days = Math.round((dayStart(d) - dayStart(new Date())) / 864e5);
+  const dayTxt = days === 0 ? 'Hoy' : days === 1 ? 'Mañana' : d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' }).replace(/^./, (c) => c.toUpperCase());
+  return `${dayTxt}, ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function setDepart(day, time) {
+  const d = dayStart(new Date()); d.setDate(d.getDate() + day);
+  const [h, m] = (time || '09:00').split(':').map(Number); d.setHours(h, m, 0, 0);
+  // Una hora que ya ha pasado hoy se entiende como ahora mismo
+  $('salida').value = d.getTime() <= Date.now() + 60000 ? '' : localISO(d);
+  updateWhen();
 }
 function updateWhen() {
-  const l = whenLabel();
-  $('btn-when').textContent = l ? `Salgo el ${l} · cambiar` : 'Salgo ahora · cambiar';
+  const v = $('salida').value, d = v ? new Date(v) : null, later = !!(d && !Number.isNaN(d.getTime())) || !$('when-box').hidden;
+  document.querySelectorAll('#whenseg [data-when]').forEach((x) => x.setAttribute('aria-checked', (x.dataset.when === 'later') === later));
+  $('when-later').textContent = d && !Number.isNaN(d.getTime()) ? whenLabel() : 'Programar';
+  $('when-box').hidden = !later;
+  if (!later) return;
+  const base = d && !Number.isNaN(d.getTime()) ? d : null;
+  const sel = base ? Math.round((dayStart(base) - dayStart(new Date())) / 864e5) : 0;
+  $('daychips').innerHTML = Array.from({ length: 7 }, (_, i) => {
+    const x = new Date(); x.setDate(x.getDate() + i);
+    const n = i === 0 ? 'Hoy' : i === 1 ? 'Mañana' : x.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+    return `<button type="button" role="radio" data-day="${i}" aria-checked="${i === sel}"><b>${n}</b><small>${x.getDate()}</small></button>`;
+  }).join('');
+  if (base) $('hora').value = `${pad2(base.getHours())}:${pad2(base.getMinutes())}`;
+}
+function scheduleLater() {
+  // Por defecto: dentro de una hora, redondeado a los 15 minutos
+  const t = new Date(Date.now() + 60 * 60000); t.setMinutes(Math.ceil(t.getMinutes() / 15) * 15, 0, 0);
+  const day = Math.round((dayStart(t) - dayStart(new Date())) / 864e5);
+  $('when-box').hidden = false;
+  setDepart(day, `${pad2(t.getHours())}:${pad2(t.getMinutes())}`);
 }
 
 /* ---------- Utilidades de resultado ---------- */
@@ -1145,8 +1185,16 @@ function renderRoutes() {
   for (const p of state.stopPlaces) L.circleMarker([p.lat, p.lon], { radius: 5, color: '#10202E', weight: 2, fillColor: '#fff', fillOpacity: 1 }).addTo(map).bindTooltip(p.name);
   map.fitBounds(bounds, { padding: [24, 24] });
   state.rmap = map;
-  $('alts').innerHTML = routes.map((r, i) => `<button type="button" role="radio" data-alt="${i}" aria-checked="${i === state.alt}">
-      <b>${esc(r.name || 'Ruta ' + (i + 1))}</b><small>${fmt(r.distKm, 0)} km · unas ${dur(r.durMin)}</small><small class="${r.tollKm >= 1 ? 'toll' : ''}">${tollTxt(r)}</small>${(() => { const c = tollCompare(r, routes); return c ? `<small class="cmpline">${c}</small>` : ''; })()}</button>`).join('');
+  const fastest = Math.min(...routes.map((r) => r.durMin));
+  $('alts').innerHTML = routes.map((r, i) => {
+    const t = r.tollKm >= 1 ? tollOf(r) : null, paid = t && t.eur >= 0.05;
+    const pill = paid ? `<span class="pill toll">Peaje ~${eurR(t.eur)}</span>` : '<span class="pill free">Sin peajes</span>';
+    const fast = routes.length > 1 && r.durMin === fastest ? '<span class="pill fast">Más rápida</span>' : '';
+    const c = paid ? tollShort(r, routes) : '';
+    return `<button type="button" role="radio" data-alt="${i}" aria-checked="${i === state.alt}">
+      <span class="rt-main"><b>${dur(r.durMin)}</b><small>${fmt(r.distKm, 0)} km${r.name ? ' · ' + esc(r.name) : ''}</small>${c ? `<small class="cmpline">${c}</small>` : ''}</span>
+      <span class="rt-pills">${fast}${pill}</span></button>`;
+  }).join('');
 }
 
 /* ---------- Panel 4: resultado ---------- */
@@ -1759,9 +1807,13 @@ function init() {
     finally { b.classList.remove('busy'); }
   };
   $('btn-geo').addEventListener('click', useLocation);
-  $('btn-when').addEventListener('click', () => { const b = $('when-box'); b.hidden = !b.hidden; if (!b.hidden) $('salida').focus(); });
-  $('salida').addEventListener('input', updateWhen);
-  $('btn-now').addEventListener('click', () => { $('salida').value = ''; $('when-box').hidden = true; updateWhen(); });
+  $('whenseg').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-when]'); if (!b) return;
+    if (b.dataset.when === 'now') { $('salida').value = ''; $('when-box').hidden = true; updateWhen(); }
+    else if ($('when-box').hidden) scheduleLater();
+  });
+  $('daychips').addEventListener('click', (e) => { const b = e.target.closest('[data-day]'); if (b) setDepart(+b.dataset.day, $('hora').value); });
+  $('hora').addEventListener('change', () => { const c = document.querySelector('#daychips [aria-checked="true"]'); setDepart(c ? +c.dataset.day : 0, $('hora').value); });
   $('peajes').addEventListener('change', save);
   $('temprano').addEventListener('change', save);
   $('viat').addEventListener('change', () => { save(); if (state.routes && state.panel === 1) renderRoutes(); });
@@ -1893,7 +1945,7 @@ function init() {
     if (e.target.closest('#btn-here')) {
       state.maxPanel = 0; go(0);
       await useLocation();
-      $('salida').value = ''; updateWhen();
+      $('salida').value = ''; $('when-box').hidden = true; updateWhen();
       if (state.origin && state.origin.gps) status('Origen cambiado a tu ubicación. Revisa el nivel del depósito en el paso del coche.');
     }
   });
